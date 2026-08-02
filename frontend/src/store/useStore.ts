@@ -2,12 +2,11 @@ import { create } from 'zustand';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Toast from 'react-native-toast-message';
 
-// Set this to your computer's local IP address if testing on a physical device
-const API_URL = Platform.select({
-  android: 'http://10.0.2.2:5001/api',
-  default: 'http://localhost:5001/api',
-});
+// Set this to your computer's local WiFi IP address if testing on a physical device
+// Your Metro bundler runs on 192.168.1.4, so we use that.
+const API_URL = 'http://192.168.1.4:5001/api';
 
 export interface User {
   _id: string;
@@ -65,10 +64,18 @@ export const useStore = create<AppState>((set) => ({
       const userData = response.data;
       await AsyncStorage.setItem('user_session', JSON.stringify(userData));
       set({ user: userData, isLoading: false });
+      Toast.show({
+        type: 'success',
+        text1: 'Welcome!',
+        text2: 'Your account has been created successfully.',
+      });
     } catch (error: any) {
-      set({ 
-        error: error.response?.data?.message || error.message || 'Failed to register', 
-        isLoading: false 
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to register';
+      set({ error: errorMsg, isLoading: false });
+      Toast.show({
+        type: 'error',
+        text1: 'Registration Failed',
+        text2: errorMsg,
       });
     }
   },
@@ -80,10 +87,18 @@ export const useStore = create<AppState>((set) => ({
       const userData = response.data;
       await AsyncStorage.setItem('user_session', JSON.stringify(userData));
       set({ user: userData, isLoading: false });
+      Toast.show({
+        type: 'success',
+        text1: 'Welcome back!',
+        text2: 'You have successfully logged in.',
+      });
     } catch (error: any) {
-      set({ 
-        error: error.response?.data?.message || error.message || 'Failed to login', 
-        isLoading: false 
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to login';
+      set({ error: errorMsg, isLoading: false });
+      Toast.show({
+        type: 'error',
+        text1: 'Login Failed',
+        text2: errorMsg,
       });
     }
   },
@@ -95,10 +110,18 @@ export const useStore = create<AppState>((set) => ({
       const userData = response.data;
       await AsyncStorage.setItem('user_session', JSON.stringify(userData));
       set({ user: userData, isLoading: false });
+      Toast.show({
+        type: 'success',
+        text1: 'Welcome!',
+        text2: `You are logged in as ${name}.`,
+      });
     } catch (error: any) {
-      set({ 
-        error: error.response?.data?.message || error.message || 'Failed Google Login', 
-        isLoading: false 
+      const errorMsg = error.response?.data?.message || error.message || 'Failed Google Login';
+      set({ error: errorMsg, isLoading: false });
+      Toast.show({
+        type: 'error',
+        text1: 'Google Login Failed',
+        text2: errorMsg,
       });
     }
   },

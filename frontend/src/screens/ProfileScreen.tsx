@@ -1,207 +1,83 @@
 import React from 'react';
-import { View, Text, Image, Pressable, SafeAreaView, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { Ionicons } from '@expo/vector-icons';
 import AnimatedCard from '../components/AnimatedCard';
 
 export default function ProfileScreen() {
   const { user, logout } = useStore();
+  const { colorScheme, toggleColorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   const handleLogout = () => {
     logout();
   };
 
   const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase();
+    return name.split(' ').map((n) => n[0]).join('').toUpperCase();
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
+    <SafeAreaView className="flex-1 bg-[#F2F4F7] dark:bg-[#050505]" edges={['top']}>
+      {/* Header */}
+      <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-[#111]">
+        <Text className="text-black dark:text-white text-3xl font-black tracking-tighter">Profile</Text>
+        <TouchableOpacity 
+          onPress={toggleColorScheme}
+          className="w-12 h-12 rounded-full bg-white dark:bg-[#111] items-center justify-center shadow-sm shadow-gray-200 dark:shadow-none border border-transparent dark:border-[#222]"
+        >
+          <Ionicons name={isDark ? "sunny" : "moon"} size={22} color={isDark ? "#E11D48" : "#0EA5E9"} />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        <AnimatedCard>
-          <View style={styles.profileInfo}>
+      <View className="flex-1 px-6 pt-6 pb-12 justify-between">
+        <AnimatedCard delay={100}>
+          <View className="bg-white dark:bg-[#111] p-8 rounded-[40px] items-center shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222]">
             {user?.avatar ? (
-              <Image source={{ uri: user.avatar }} style={styles.avatar} />
+              <Image source={{ uri: user.avatar }} className="w-28 h-28 rounded-full border-4 border-[#0EA5E9] dark:border-[#E11D48] mb-6" />
             ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarPlaceholderText}>
-                  {user?.name ? getInitials(user.name) : 'U'}
-                </Text>
+              <View className="w-28 h-28 rounded-full bg-[#F2F4F7] dark:bg-[#222] border-4 border-[#0EA5E9] dark:border-[#E11D48] items-center justify-center mb-6">
+                <Text className="text-black dark:text-white text-4xl font-black">{user?.name ? getInitials(user.name) : 'U'}</Text>
               </View>
             )}
-            <Text style={styles.name}>{user?.name || 'Guest User'}</Text>
-            <Text style={styles.email}>{user?.email || 'guest@mail.com'}</Text>
+            <Text className="text-black dark:text-white text-2xl font-black">{user?.name || 'Guest User'}</Text>
+            <Text className="text-gray-500 dark:text-gray-400 text-base font-bold mt-1">{user?.email || 'guest@mail.com'}</Text>
           </View>
         </AnimatedCard>
 
-        <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>App Preferences</Text>
-          <View style={styles.settingsCard}>
-            <View style={styles.settingItem}>
-              <View style={styles.settingLabel}>
-                <Ionicons name="cash-outline" size={22} color="#6366F1" />
-                <Text style={styles.settingText}>Primary Currency</Text>
+        <View className="mt-10 flex-1">
+          <Text className="text-gray-400 dark:text-gray-600 text-xs font-bold uppercase tracking-widest mb-4">App Preferences</Text>
+          <View className="bg-white dark:bg-[#111] rounded-[32px] px-6 shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222]">
+            
+            <View className="flex-row items-center justify-between py-6">
+              <View className="flex-row items-center">
+                <Ionicons name="cash" size={24} color={isDark ? "#E11D48" : "#0EA5E9"} />
+                <Text className="text-black dark:text-white text-lg font-black ml-4">Currency</Text>
               </View>
-              <Text style={styles.settingValue}>USD ($)</Text>
+              <Text className="text-gray-500 dark:text-gray-400 font-bold">USD ($)</Text>
             </View>
 
-            <View style={styles.divider} />
+            <View className="h-[1px] bg-gray-100 dark:bg-[#222]" />
 
-            <View style={styles.settingItem}>
-              <View style={styles.settingLabel}>
-                <Ionicons name="shield-checkmark-outline" size={22} color="#10B981" />
-                <Text style={styles.settingText}>Account Status</Text>
+            <View className="flex-row items-center justify-between py-6">
+              <View className="flex-row items-center">
+                <Ionicons name="shield-checkmark" size={24} color="#10B981" />
+                <Text className="text-black dark:text-white text-lg font-black ml-4">Account</Text>
               </View>
-              <Text style={styles.settingValue}>Verified</Text>
+              <Text className="text-gray-500 dark:text-gray-400 font-bold">Verified</Text>
             </View>
           </View>
         </View>
 
-        <Pressable 
+        <TouchableOpacity 
           onPress={handleLogout} 
-          style={({ pressed }) => [
-            styles.logoutButton,
-            pressed && styles.logoutButtonPressed
-          ]}
+          className="flex-row items-center justify-center bg-red-50 dark:bg-red-500/10 py-5 rounded-[24px] border border-red-100 dark:border-red-500/20"
         >
-          <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </Pressable>
+          <Ionicons name="log-out" size={24} color="#EF4444" />
+          <Text className="text-[#EF4444] text-lg font-black ml-3">SIGN OUT</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F0F13',
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1A24',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'space-between',
-  },
-  profileInfo: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    borderWidth: 3,
-    borderColor: '#6366F1',
-    marginBottom: 16,
-  },
-  avatarPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#1A1A24',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#6366F1',
-    marginBottom: 16,
-  },
-  avatarPlaceholderText: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-  name: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  email: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  settingsSection: {
-    marginTop: 32,
-    flex: 1,
-  },
-  sectionTitle: {
-    color: '#6B7280',
-    fontSize: 12,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  settingsCard: {
-    backgroundColor: '#1A1A24',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#262636',
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-  },
-  settingLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 12,
-  },
-  settingValue: {
-    color: '#6B7280',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#262636',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  logoutButtonPressed: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-  },
-  logoutText: {
-    color: '#EF4444',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-});

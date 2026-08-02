@@ -12,7 +12,12 @@
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aneesaboobacker.frontend",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "We use speech recognition to instantly categorize your spoken expenses.",
+        "NSMicrophoneUsageDescription": "We need microphone access to record your voice notes."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,14 +27,22 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.aneesaboobacker.frontend"
+      "package": "com.aneesaboobacker.frontend",
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow ExpenseTracker to access the microphone for voice expenses.",
+          "speechRecognitionPermission": "Allow ExpenseTracker to securely recognize your spoken expenses."
+        }
+      ]
     ]
   }
 }

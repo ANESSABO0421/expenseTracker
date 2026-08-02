@@ -1,13 +1,14 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated } from 'react-native';
+import { Animated, ViewStyle } from 'react-native';
 
 interface AnimatedCardProps {
   children: React.ReactNode;
   delay?: number;
   className?: string;
+  style?: ViewStyle;
 }
 
-export default function AnimatedCard({ children, delay = 0, className = '' }: AnimatedCardProps) {
+export default function AnimatedCard({ children, delay = 0, className = '', style }: AnimatedCardProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -15,13 +16,13 @@ export default function AnimatedCard({ children, delay = 0, className = '' }: An
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 600,
         delay,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 500,
+        duration: 600,
         delay,
         useNativeDriver: true,
       }),
@@ -30,11 +31,14 @@ export default function AnimatedCard({ children, delay = 0, className = '' }: An
 
   return (
     <Animated.View
-      style={{
-        opacity: fadeAnim,
-        transform: [{ translateY: slideAnim }],
-      }}
-      className={`bg-[#1A1A24] rounded-3xl p-6 border border-gray-800/50 shadow-xl ${className}`}
+      style={[
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+        style
+      ]}
+      className={className}
     >
       {children}
     </Animated.View>
