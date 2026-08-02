@@ -4,9 +4,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useEffect } from 'react';
 import DashboardScreen from '../screens/DashboardScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
+import { useStore } from '../store/useStore';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -43,15 +46,27 @@ function TabNavigator() {
 }
 
 export default function AppNavigator() {
+  const { user, restoreSession } = useStore();
+
+  useEffect(() => {
+    restoreSession();
+  }, []);
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="MainTabs" component={TabNavigator} />
-        <Stack.Screen 
-          name="AddTransaction" 
-          component={AddTransactionScreen} 
-          options={{ presentation: 'modal' }} 
-        />
+        {user ? (
+          <>
+            <Stack.Screen name="MainTabs" component={TabNavigator} />
+            <Stack.Screen 
+              name="AddTransaction" 
+              component={AddTransactionScreen} 
+              options={{ presentation: 'modal' }} 
+            />
+          </>
+        ) : (
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
