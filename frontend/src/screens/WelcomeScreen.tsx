@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore';
 import PremiumButton from '../components/PremiumButton';
 import AnimatedCard from '../components/AnimatedCard';
 import Svg, { Path, G } from 'react-native-svg';
+import { useGoogleAuth } from '../utils/useGoogleAuth';
 
 export default function WelcomeScreen() {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,7 +12,8 @@ export default function WelcomeScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const { login, register, googleLogin, isLoading, error } = useStore();
+  const { login, register, isLoading, error } = useStore();
+  const { promptAsync, isDisabled } = useGoogleAuth();
 
   const handleSubmit = () => {
     if (!email || !password) return;
@@ -24,13 +26,7 @@ export default function WelcomeScreen() {
   };
 
   const handleGoogleSignIn = () => {
-    // Mimic Google SSO Auth response for local testing and developer debugging
-    googleLogin(
-      'google_user_id_' + Math.random().toString(36).substr(2, 9),
-      'google_user_' + Math.random().toString(36).substr(2, 4) + '@gmail.com',
-      'Google User',
-      'https://lh3.googleusercontent.com/a/default-user'
-    );
+    promptAsync();
   };
 
   return (
