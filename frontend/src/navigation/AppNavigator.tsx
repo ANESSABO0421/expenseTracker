@@ -9,6 +9,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 import { useStore } from '../store/useStore';
 
 const Stack = createNativeStackNavigator();
@@ -34,6 +35,8 @@ function TabNavigator() {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Analytics') {
             iconName = focused ? 'pie-chart' : 'pie-chart-outline';
+          } else if (route.name === 'Profile') {
+            iconName = focused ? 'person' : 'person-outline';
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -41,6 +44,7 @@ function TabNavigator() {
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Analytics" component={AnalyticsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }

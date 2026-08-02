@@ -1,9 +1,13 @@
 import { create } from 'zustand';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 // Set this to your computer's local IP address if testing on a physical device
-const API_URL = 'http://localhost:5001/api'; 
+const API_URL = Platform.select({
+  android: 'http://10.0.2.2:5001/api',
+  default: 'http://localhost:5001/api',
+});
 
 export interface User {
   _id: string;
