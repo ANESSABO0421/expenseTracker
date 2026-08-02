@@ -1,15 +1,14 @@
 const Transaction = require('../models/Transaction');
 
-// @desc    Get all transactions
-// @route   GET /api/transactions
+// @desc    Get all transactions for a user
+// @route   GET /api/transactions/user/:userId
 // @access  Public
 const getTransactions = async (req, res) => {
   try {
-    const transactions = await Transaction.find().populate('categoryId').sort({ date: -1 });
-    res.status(200).json(transactions);
+    const transactions = await Transaction.find({ user: req.params.userId }).sort({ date: -1 });
+    res.status(200).json({ success: true, data: transactions });
   } catch (error) {
-    res.status(500);
-    throw new Error(error.message);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -18,26 +17,24 @@ const getTransactions = async (req, res) => {
 // @access  Public
 const createTransaction = async (req, res) => {
   try {
-    const { amount, description, date, categoryId, userId, isSubscription } = req.body;
+    const { user, amount, type, category, description, receiptUrl } = req.body;
     
-    if (!amount || !description || !categoryId || !userId) {
-      res.status(400);
-      throw new Error('Please add all required fields');
+    if (!user || !amount || !type || !category) {
+      return res.status(400).json({ success: false, message: 'Please add all required fields' });
     }
 
     const transaction = await Transaction.create({
+      user,
       amount,
+      type,
+      category,
       description,
-      date: date || Date.now(),
-      categoryId,
-      userId,
-      isSubscription
+      receiptUrl
     });
 
-    res.status(201).json(transaction);
+    res.status(201).json({ success: true, data: transaction });
   } catch (error) {
-    res.status(400);
-    throw new Error(error.message);
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -49,15 +46,13 @@ const deleteTransaction = async (req, res) => {
     const transaction = await Transaction.findById(req.params.id);
 
     if (!transaction) {
-      res.status(404);
-      throw new Error('Transaction not found');
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
     }
 
     await transaction.deleteOne();
-    res.status(200).json({ id: req.params.id });
+    res.status(200).json({ success: true, id: req.params.id });
   } catch (error) {
-    res.status(500);
-    throw new Error(error.message);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

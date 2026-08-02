@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, useColorScheme } from 'react-native';
+import { View, Text, Image, TouchableOpacity } from 'react-native';
+import { useColorScheme } from 'nativewind';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { Ionicons } from '@expo/vector-icons';

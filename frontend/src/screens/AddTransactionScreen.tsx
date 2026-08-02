@@ -15,6 +15,7 @@ export default function AddTransactionScreen({ navigation }: any) {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+  const [receiptUrl, setReceiptUrl] = useState<string | undefined>(undefined);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -69,6 +70,7 @@ export default function AddTransactionScreen({ navigation }: any) {
         type,
         category,
         description,
+        receiptUrl,
       });
       Toast.show({ type: 'success', text1: 'Success', text2: 'Transaction added successfully!' });
       navigation.goBack();
@@ -85,18 +87,43 @@ export default function AddTransactionScreen({ navigation }: any) {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       quality: 0.5,
+      base64: true,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets[0].base64) {
       setIsScanning(true);
-      // MOCK: Simulate Cloudinary Upload & AI OCR Processing
-      setTimeout(() => {
-        setAmount('124.50');
-        setCategory('Groceries');
-        setDescription('Whole Foods Market receipt');
+      
+      try {
+        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        
+        // Upload to Node backend
+        const response = await fetch('http://192.168.1.4:5001/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64Image })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Store the Cloudinary URL
+          setReceiptUrl(data.data.receiptUrl);
+          
+          // MOCK: Simulate AI OCR Processing values
+          setAmount('124.50');
+          setCategory('Groceries');
+          setDescription('Whole Foods Market receipt');
+          
+          Toast.show({ type: 'success', text1: 'AI Scan Complete', text2: 'Receipt securely uploaded & parsed!' });
+        } else {
+          throw new Error(data.message || 'Failed to upload receipt');
+        }
+      } catch (err: any) {
+        console.error(err);
+        Toast.show({ type: 'error', text1: 'Upload Failed', text2: err.message });
+      } finally {
         setIsScanning(false);
-        Toast.show({ type: 'success', text1: 'AI Scan Complete', text2: 'Successfully extracted data from receipt!' });
-      }, 2500);
+      }
     }
   };
 

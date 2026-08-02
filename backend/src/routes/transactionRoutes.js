@@ -3,8 +3,10 @@ const { getTransactions, createTransaction, deleteTransaction } = require('../co
 
 const router = express.Router();
 
+router.route('/user/:userId')
+  .get(getTransactions);
+
 router.route('/')
-  .get(getTransactions)
   .post(createTransaction);
 
 router.route('/:id')

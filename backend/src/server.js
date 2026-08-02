@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const transactionRoutes = require('./routes/transactionRoutes');
 const authRoutes = require('./routes/authRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const insightRoutes = require('./routes/insightRoutes');
 const { errorHandler } = require('./middleware/errorMiddleware');
 
 // Load env vars
@@ -28,6 +30,8 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/insights', insightRoutes);
 
 // Error Middleware
 app.use(errorHandler);

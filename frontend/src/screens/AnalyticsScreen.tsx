@@ -1,24 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, useColorScheme, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { useColorScheme } from 'nativewind';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store/useStore';
 import AnimatedCard from '../components/AnimatedCard';
 
 export default function AnalyticsScreen() {
-  const { transactions } = useStore();
+  const { transactions, insights, isGeneratingInsights, generateInsights } = useStore();
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
-  const [isGenerating, setIsGenerating] = useState(true);
 
-  // MOCK: Generate Insights
+  // Generate insights on mount if empty, or just rely on manual refresh
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsGenerating(false);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (insights.length === 0 && transactions.length > 0) {
+      generateInsights(transactions);
+    }
+  }, [transactions.length]);
 
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
 
@@ -41,7 +39,7 @@ export default function AnalyticsScreen() {
           <Text className="text-black dark:text-white text-4xl font-black tracking-tighter leading-none">Smart Budget</Text>
         </View>
 
-        {isGenerating ? (
+        {isGeneratingInsights ? (
           <View className="bg-white dark:bg-[#111] p-10 rounded-[40px] items-center justify-center mt-4 shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222]">
             <ActivityIndicator size="large" color={isDark ? "#E11D48" : "#0EA5E9"} className="mb-6" />
             <Text className="text-black dark:text-white text-2xl font-black tracking-tighter text-center">Analyzing Data</Text>
@@ -49,41 +47,45 @@ export default function AnalyticsScreen() {
           </View>
         ) : (
           <View>
-            <AnimatedCard delay={100} className="mb-6">
-              <View className="bg-white dark:bg-[#111] p-6 rounded-[32px] shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222] flex-row items-start">
-                <View className="w-14 h-14 bg-red-50 dark:bg-red-500/10 rounded-full items-center justify-center mr-5">
-                  <Ionicons name="warning" size={28} color="#EF4444" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-black dark:text-white text-xl font-black mb-1">High Spending Alert</Text>
-                  <Text className="text-gray-500 dark:text-gray-400 font-bold leading-5">You've spent ${totalExpense.toFixed(0)} so far this month. At this rate, you will exceed your average budget by 15%.</Text>
-                </View>
-              </View>
-            </AnimatedCard>
+            {insights.map((insight, index) => {
+              
+              // Map text colors
+              const getIconBg = () => {
+                switch(insight.color) {
+                  case 'red': return 'bg-red-50 dark:bg-red-500/10';
+                  case 'green': return 'bg-green-50 dark:bg-green-500/10';
+                  case 'blue': return 'bg-blue-50 dark:bg-blue-500/10';
+                  case 'orange': return 'bg-orange-50 dark:bg-orange-500/10';
+                  case 'purple': return 'bg-purple-50 dark:bg-purple-500/10';
+                  default: return 'bg-gray-50 dark:bg-gray-500/10';
+                }
+              };
 
-            <AnimatedCard delay={200} className="mb-6">
-              <View className="bg-white dark:bg-[#111] p-6 rounded-[32px] shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222] flex-row items-start">
-                <View className="w-14 h-14 bg-green-50 dark:bg-green-500/10 rounded-full items-center justify-center mr-5">
-                  <Ionicons name="trending-up" size={28} color="#10B981" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-black dark:text-white text-xl font-black mb-1">Income Growth</Text>
-                  <Text className="text-gray-500 dark:text-gray-400 font-bold leading-5">Your income stream is up 8% compared to last month. Great job staying consistent!</Text>
-                </View>
-              </View>
-            </AnimatedCard>
+              const getIconColor = () => {
+                switch(insight.color) {
+                  case 'red': return '#EF4444';
+                  case 'green': return '#10B981';
+                  case 'blue': return '#0EA5E9';
+                  case 'orange': return '#F59E0B';
+                  case 'purple': return '#8B5CF6';
+                  default: return '#6B7280';
+                }
+              };
 
-            <AnimatedCard delay={300} className="mb-6">
-              <View className="bg-white dark:bg-[#111] p-6 rounded-[32px] shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222] flex-row items-start">
-                <View className="w-14 h-14 bg-blue-50 dark:bg-blue-500/10 rounded-full items-center justify-center mr-5">
-                  <Ionicons name="restaurant" size={28} color="#0EA5E9" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-black dark:text-white text-xl font-black mb-1">Category Focus: Food</Text>
-                  <Text className="text-gray-500 dark:text-gray-400 font-bold leading-5">Consider cooking at home more often. You can save approximately $120 next week by reducing eating out.</Text>
-                </View>
-              </View>
-            </AnimatedCard>
+              return (
+                <AnimatedCard key={index} delay={(index + 1) * 100} className="mb-6">
+                  <View className="bg-white dark:bg-[#111] p-6 rounded-[32px] shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222] flex-row items-start">
+                    <View className={`w-14 h-14 ${getIconBg()} rounded-full items-center justify-center mr-5`}>
+                      <Ionicons name={insight.icon as any || "analytics"} size={28} color={getIconColor()} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-black dark:text-white text-xl font-black mb-1">{insight.title}</Text>
+                      <Text className="text-gray-500 dark:text-gray-400 font-bold leading-5">{insight.message}</Text>
+                    </View>
+                  </View>
+                </AnimatedCard>
+              );
+            })}
           </View>
         )}
 

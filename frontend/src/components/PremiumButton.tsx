@@ -8,9 +8,10 @@ interface PremiumButtonProps {
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'danger';
   className?: string;
+  isLoading?: boolean;
 }
 
-export default function PremiumButton({ title, onPress, variant = 'primary', className = '' }: PremiumButtonProps) {
+export default function PremiumButton({ title, onPress, variant = 'primary', className = '', isLoading = false }: PremiumButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -44,9 +45,17 @@ export default function PremiumButton({ title, onPress, variant = 'primary', cla
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={{ transform: [{ scale }] }}
-      className={`w-full py-4 rounded-2xl items-center justify-center shadow-lg ${bgColor} ${shadowColor} ${className}`}
+      disabled={isLoading}
+      className={`w-full py-4 rounded-[24px] items-center justify-center shadow-lg ${bgColor} ${shadowColor} ${className} ${isLoading ? 'opacity-80' : ''}`}
     >
-      <Text className="text-white text-lg font-bold tracking-wide">{title}</Text>
+      {isLoading ? (
+        <React.Fragment>
+          {/* React Native ActivityIndicator or custom loading spinner */}
+          <Text className="text-white text-lg font-bold tracking-wide">Loading...</Text>
+        </React.Fragment>
+      ) : (
+        <Text className="text-white text-lg font-black tracking-tight uppercase">{title}</Text>
+      )}
     </AnimatedPressable>
   );
 }

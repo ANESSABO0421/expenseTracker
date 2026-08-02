@@ -24,6 +24,14 @@ export interface Transaction {
   category: string;
   description?: string;
   date: string;
+  receiptUrl?: string;
+}
+
+export interface Insight {
+  title: string;
+  message: string;
+  icon: string;
+  color: string;
 }
 
 interface AppState {
@@ -38,6 +46,9 @@ interface AppState {
   logout: () => Promise<void>;
   fetchTransactions: (userId: string) => Promise<void>;
   addTransaction: (transaction: Omit<Transaction, '_id' | 'date'>) => Promise<void>;
+  insights: Insight[];
+  isGeneratingInsights: boolean;
+  generateInsights: (transactions: Transaction[]) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -45,6 +56,8 @@ export const useStore = create<AppState>((set) => ({
   transactions: [],
   isLoading: false,
   error: null,
+  insights: [],
+  isGeneratingInsights: false,
 
   restoreSession: async () => {
     try {
@@ -156,6 +169,16 @@ export const useStore = create<AppState>((set) => ({
       }));
     } catch (error: any) {
       set({ error: error.message || 'Failed to add transaction', isLoading: false });
+    }
+  },
+
+  generateInsights: async (transactions) => {
+    set({ isGeneratingInsights: true, error: null });
+    try {
+      const response = await axios.post(`${API_URL}/insights`, { transactions });
+      set({ insights: response.data.data, isGeneratingInsights: false });
+    } catch (error: any) {
+      set({ error: error.message || 'Failed to generate insights', isGeneratingInsights: false });
     }
   }
 }));
