@@ -1,14 +1,13 @@
-import { Request, Response } from 'express';
-import Transaction from '../models/Transaction';
+const Transaction = require('../models/Transaction');
 
 // @desc    Get all transactions
 // @route   GET /api/transactions
 // @access  Public
-export const getTransactions = async (req: Request, res: Response) => {
+const getTransactions = async (req, res) => {
   try {
     const transactions = await Transaction.find().populate('categoryId').sort({ date: -1 });
     res.status(200).json(transactions);
-  } catch (error: any) {
+  } catch (error) {
     res.status(500);
     throw new Error(error.message);
   }
@@ -17,7 +16,7 @@ export const getTransactions = async (req: Request, res: Response) => {
 // @desc    Create a new transaction
 // @route   POST /api/transactions
 // @access  Public
-export const createTransaction = async (req: Request, res: Response) => {
+const createTransaction = async (req, res) => {
   try {
     const { amount, description, date, categoryId, userId, isSubscription } = req.body;
     
@@ -36,7 +35,7 @@ export const createTransaction = async (req: Request, res: Response) => {
     });
 
     res.status(201).json(transaction);
-  } catch (error: any) {
+  } catch (error) {
     res.status(400);
     throw new Error(error.message);
   }
@@ -45,7 +44,7 @@ export const createTransaction = async (req: Request, res: Response) => {
 // @desc    Delete a transaction
 // @route   DELETE /api/transactions/:id
 // @access  Public
-export const deleteTransaction = async (req: Request, res: Response) => {
+const deleteTransaction = async (req, res) => {
   try {
     const transaction = await Transaction.findById(req.params.id);
 
@@ -56,8 +55,14 @@ export const deleteTransaction = async (req: Request, res: Response) => {
 
     await transaction.deleteOne();
     res.status(200).json({ id: req.params.id });
-  } catch (error: any) {
+  } catch (error) {
     res.status(500);
     throw new Error(error.message);
   }
+};
+
+module.exports = {
+  getTransactions,
+  createTransaction,
+  deleteTransaction
 };
