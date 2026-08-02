@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { generateInsights } = require('../utils/groqAI');
+const { generateInsights } = require('../utils/geminiAI');
 
 // @desc    Generate personalized AI insights based on transaction data
 // @route   POST /api/insights

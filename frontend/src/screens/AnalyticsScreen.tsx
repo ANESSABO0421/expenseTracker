@@ -13,10 +13,10 @@ export default function AnalyticsScreen() {
 
   // Generate insights on mount if empty, or just rely on manual refresh
   useEffect(() => {
-    if (insights.length === 0 && transactions.length > 0) {
+    if (insights.length === 0) {
       generateInsights(transactions);
     }
-  }, [transactions.length]);
+  }, [transactions.length, insights.length]);
 
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
 
