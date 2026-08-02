@@ -69,13 +69,18 @@ const generateInsights = async (transactions) => {
       }
     });
 
-    const parsedInsights = JSON.parse(response.text());
+    let parsedInsights = JSON.parse(response.text);
     
+    // Gemini sometimes wraps the array in another array when using strict JSON schema
+    if (Array.isArray(parsedInsights) && Array.isArray(parsedInsights[0])) {
+      parsedInsights = parsedInsights[0];
+    }
+
     // Safety check just in case
     if (Array.isArray(parsedInsights)) {
       return parsedInsights.slice(0, 3);
     }
-    
+
     throw new Error("Invalid structure returned by LLM");
   } catch (error) {
     console.error('Gemini AI Error:', error);
