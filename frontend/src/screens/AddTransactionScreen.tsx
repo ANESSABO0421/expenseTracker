@@ -1,56 +1,72 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, useColorScheme, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, ScrollView,
+  KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useColorScheme } from 'nativewind';
 import { useStore } from '../store/useStore';
-import PremiumButton from '../components/PremiumButton';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { parseSpokenTransaction } from '../utils/nlpParser';
 
+// Map currency code → symbol
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥', CAD: 'CA$', AUD: 'A$',
+};
+
+const CATEGORIES = {
+  expense: ['Food', 'Transport', 'Shopping', 'Bills', 'Health', 'Entertainment', 'Travel', 'Other'],
+  income: ['Salary', 'Freelance', 'Investment', 'Gift', 'Rental', 'Business', 'Other'],
+};
+
 export default function AddTransactionScreen({ navigation }: any) {
-  const { user, addTransaction, isLoading } = useStore();
+  const { user, addTransaction, isLoading, currency, exchangeRates } = useStore();
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [receiptUrl, setReceiptUrl] = useState<string | undefined>(undefined);
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
-  // AI States
   const [isScanning, setIsScanning] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
 
-  // Speech Recognition Listener
+  // Currency symbol derived from selected currency
+  const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
+
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const bg = isDark ? '#000000' : '#F2F2F7';
+  const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
+  const textPrimary = isDark ? '#FFFFFF' : '#1C1C1E';
+  const textSecondary = isDark ? '#8E8E93' : '#6C6C70';
+  const inputBg = isDark ? '#2C2C2E' : '#F2F2F7';
+  const separator = isDark ? '#2C2C2E' : '#E5E5EA';
+
+  const isExpense = type === 'expense';
+  const accentColor = isExpense ? '#FF3B30' : '#34C759';
+
   useSpeechRecognitionEvent('result', (event) => {
     const transcript = event.results[0]?.transcript;
     if (transcript) {
-      // Pass the raw speech to our local NLP Engine
-      const { amount: extractedAmount, category: extractedCategory, description: extractedDescription } = parseSpokenTransaction(transcript);
-      
-      setAmount(extractedAmount);
-      setCategory(extractedCategory);
-      setDescription(extractedDescription);
-      
-      Toast.show({ type: 'success', text1: 'Voice Recognized', text2: 'Successfully extracted your expense!' });
+      const { amount: a, category: c, description: d } = parseSpokenTransaction(transcript);
+      setAmount(a); setCategory(c); setDescription(d);
+      Toast.show({ type: 'success', text1: 'Voice Recognized', text2: 'Transaction details extracted!' });
     }
-    setIsRecording(false);
-    setIsProcessingVoice(false);
+    setIsRecording(false); setIsProcessingVoice(false);
   });
 
   useSpeechRecognitionEvent('error', (event) => {
-    console.log('Speech recognition error', event);
-    setIsRecording(false);
-    setIsProcessingVoice(false);
-    Toast.show({ type: 'error', text1: 'Recognition Failed', text2: event.error || 'Please try speaking again.' });
+    setIsRecording(false); setIsProcessingVoice(false);
+    Toast.show({ type: 'error', text1: 'Recognition Failed', text2: 'Please try speaking again.' });
   });
 
   useSpeechRecognitionEvent('end', () => {
-    setIsRecording(false);
-    setIsProcessingVoice(false);
+    setIsRecording(false); setIsProcessingVoice(false);
   });
 
   const handleSave = async () => {
@@ -62,64 +78,32 @@ export default function AddTransactionScreen({ navigation }: any) {
       Toast.show({ type: 'error', text1: 'Category Required', text2: 'Please enter a category.' });
       return;
     }
-
     if (user?._id) {
-      await addTransaction({
-        user: user._id,
-        amount: Number(amount),
-        type,
-        category,
-        description,
-        receiptUrl,
-      });
-      Toast.show({ type: 'success', text1: 'Success', text2: 'Transaction added successfully!' });
+      await addTransaction({ user: user._id, amount: Number(amount), type, category, description, receiptUrl });
+      Toast.show({ type: 'success', text1: 'Saved!', text2: 'Transaction added successfully.' });
       navigation.goBack();
     }
   };
 
   const handleScanReceipt = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'We need camera roll permissions to scan receipts!' });
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      quality: 0.5,
-      base64: true,
-    });
-
+    if (status !== 'granted') return;
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.5, base64: true });
     if (!result.canceled && result.assets[0].base64) {
       setIsScanning(true);
-      
       try {
         const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        
-        // Upload to Node backend
         const response = await fetch('http://192.168.1.4:5001/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ base64Image })
         });
-        
         const data = await response.json();
-        
         if (data.success) {
-          // Store the Cloudinary URL
           setReceiptUrl(data.data.receiptUrl);
-          
-          // MOCK: Simulate AI OCR Processing values
-          setAmount('124.50');
-          setCategory('Groceries');
-          setDescription('Whole Foods Market receipt');
-          
-          Toast.show({ type: 'success', text1: 'AI Scan Complete', text2: 'Receipt securely uploaded & parsed!' });
-        } else {
-          throw new Error(data.message || 'Failed to upload receipt');
+          setAmount('124.50'); setCategory('Groceries'); setDescription('Whole Foods Market receipt');
+          Toast.show({ type: 'success', text1: 'Receipt Scanned!', text2: 'Details extracted successfully.' });
         }
       } catch (err: any) {
-        console.error(err);
         Toast.show({ type: 'error', text1: 'Upload Failed', text2: err.message });
       } finally {
         setIsScanning(false);
@@ -130,156 +114,226 @@ export default function AddTransactionScreen({ navigation }: any) {
   const toggleRecording = async () => {
     try {
       if (isRecording) {
-        // Stop recording
         ExpoSpeechRecognitionModule.stop();
-        setIsRecording(false);
-        setIsProcessingVoice(true);
+        setIsRecording(false); setIsProcessingVoice(true);
       } else {
-        // Start recording
         const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'We need speech recognition permissions!' });
-          return;
-        }
-
-        ExpoSpeechRecognitionModule.start({
-          lang: 'en-US',
-          interimResults: false,
-        });
-        
+        if (status !== 'granted') return;
+        ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: false });
         setIsRecording(true);
       }
-    } catch (err) {
-      console.error('Failed to start recording', err);
-      setIsRecording(false);
-      setIsProcessingVoice(false);
+    } catch {
+      setIsRecording(false); setIsProcessingVoice(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F2F4F7] dark:bg-[#050505]" edges={['top']}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        className="flex-1"
-      >
-        <ScrollView className="flex-1 px-5 pt-4 pb-12" showsVerticalScrollIndicator={false}>
-          
-          {/* Maximalist Header */}
-          <View className="flex-row justify-between items-center mb-10 mt-2">
-            <Text className="text-black dark:text-white text-4xl font-black tracking-tighter">New Entry</Text>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()}
-              className="w-14 h-14 bg-white dark:bg-[#111] shadow-lg shadow-gray-200/50 dark:shadow-none rounded-full items-center justify-center border border-transparent dark:border-[#222]"
-            >
-              <Ionicons name="close" size={28} color={isDark ? "#FFF" : "#000"} />
+    <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={[styles.headerTitle, { color: textPrimary }]}>New Entry</Text>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.closeBtn, { backgroundColor: cardBg }]}>
+              <Ionicons name="close" size={20} color={textPrimary} />
             </TouchableOpacity>
           </View>
 
-          {/* Chunky Type Toggle */}
-          <View className="flex-row bg-white dark:bg-[#111] shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222] p-2 rounded-[32px] mb-10">
-            <TouchableOpacity 
+          {/* Type Toggle */}
+          <View style={[styles.typeToggle, { backgroundColor: cardBg }]}>
+            <TouchableOpacity
+              style={[styles.typeBtn, isExpense && { backgroundColor: '#FF3B30' }]}
               onPress={() => setType('expense')}
-              className={`flex-1 py-5 rounded-[24px] items-center ${type === 'expense' ? 'bg-[#000] dark:bg-[#E11D48]' : 'bg-transparent'}`}
             >
-              <Text className={`text-xl font-black tracking-tight ${type === 'expense' ? 'text-white' : 'text-gray-400 dark:text-gray-600'}`}>EXPENSE</Text>
+              <Ionicons name="arrow-up" size={16} color={isExpense ? '#FFF' : textSecondary} />
+              <Text style={[styles.typeBtnText, { color: isExpense ? '#FFF' : textSecondary }]}>Expense</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
+              style={[styles.typeBtn, !isExpense && { backgroundColor: '#34C759' }]}
               onPress={() => setType('income')}
-              className={`flex-1 py-5 rounded-[24px] items-center ${type === 'income' ? 'bg-[#000] dark:bg-[#10B981]' : 'bg-transparent'}`}
             >
-              <Text className={`text-xl font-black tracking-tight ${type === 'income' ? 'text-white' : 'text-gray-400 dark:text-gray-600'}`}>INCOME</Text>
+              <Ionicons name="arrow-down" size={16} color={!isExpense ? '#FFF' : textSecondary} />
+              <Text style={[styles.typeBtnText, { color: !isExpense ? '#FFF' : textSecondary }]}>Income</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Huge Amount Input */}
-          <View className="items-center mb-12">
-            <Text className="text-gray-400 dark:text-gray-600 text-sm font-bold uppercase tracking-widest mb-2">Amount</Text>
-            <View className="flex-row items-center">
-              <Text className="text-black dark:text-gray-400 text-6xl font-black mr-2">$</Text>
+          {/* Amount Display */}
+          <View style={[styles.amountCard, { backgroundColor: cardBg }]}>
+            <Text style={[styles.amountLabel, { color: textSecondary }]}>Amount</Text>
+            <View style={styles.amountRow}>
+              <Text style={[styles.currencySymbol, { color: accentColor }]}>{currencySymbol}</Text>
               <TextInput
                 value={amount}
                 onChangeText={setAmount}
                 placeholder="0.00"
-                placeholderTextColor={isDark ? "#333" : "#D1D5DB"}
+                placeholderTextColor={isDark ? '#3A3A3C' : '#D1D1D6'}
                 keyboardType="decimal-pad"
-                className="text-black dark:text-white text-8xl font-black tracking-tighter"
+                style={[styles.amountInput, { color: textPrimary }]}
                 autoFocus
               />
             </View>
+            <View style={[styles.amountDivider, { backgroundColor: accentColor }]} />
           </View>
 
-          {/* Bold Form Fields */}
-          <View className="space-y-4 mb-10">
-            <View className="bg-white dark:bg-[#111] px-6 py-5 rounded-[32px] shadow-lg shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222]">
-              <Text className="text-gray-400 dark:text-gray-600 text-xs font-bold uppercase tracking-widest mb-1">Category</Text>
-              <TextInput
-                value={category}
-                onChangeText={setCategory}
-                placeholder="Food, Rent, Salary..."
-                placeholderTextColor={isDark ? "#444" : "#9CA3AF"}
-                className="text-black dark:text-white text-2xl font-black mt-1"
-              />
+          {/* Category Chips */}
+          <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+            <Text style={[styles.fieldLabel, { color: textSecondary }]}>Quick Select</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+              <View style={styles.chipsRow}>
+                {CATEGORIES[type].map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: category === cat ? accentColor : cardBg,
+                        borderColor: category === cat ? accentColor : separator,
+                      }
+                    ]}
+                    onPress={() => setCategory(cat)}
+                  >
+                    <Text style={[styles.chipText, { color: category === cat ? '#FFF' : textSecondary }]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Fields */}
+          <View style={[styles.fieldsCard, { backgroundColor: cardBg }]}>
+            <View style={styles.fieldRow}>
+              <Ionicons name="pricetag-outline" size={18} color={textSecondary} style={{ marginRight: 14 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: textSecondary }]}>Category</Text>
+                <TextInput
+                  value={category}
+                  onChangeText={setCategory}
+                  placeholder="Food, Rent, Salary..."
+                  placeholderTextColor={isDark ? '#3A3A3C' : '#C7C7CC'}
+                  style={[styles.fieldInput, { color: textPrimary }]}
+                />
+              </View>
             </View>
 
-            <View className="bg-white dark:bg-[#111] px-6 py-5 rounded-[32px] shadow-lg shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222]">
-              <Text className="text-gray-400 dark:text-gray-600 text-xs font-bold uppercase tracking-widest mb-1">Notes (Optional)</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Enter details..."
-                placeholderTextColor={isDark ? "#444" : "#9CA3AF"}
-                className="text-black dark:text-white text-xl font-bold mt-1"
-              />
+            <View style={[styles.fieldSeparator, { backgroundColor: separator }]} />
+
+            <View style={styles.fieldRow}>
+              <Ionicons name="document-text-outline" size={18} color={textSecondary} style={{ marginRight: 14 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: textSecondary }]}>Notes</Text>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Add details (optional)"
+                  placeholderTextColor={isDark ? '#3A3A3C' : '#C7C7CC'}
+                  style={[styles.fieldInput, { color: textPrimary }]}
+                  multiline
+                />
+              </View>
             </View>
           </View>
 
-          {/* AI Features */}
-          <View className="flex-row space-x-4 mb-10 justify-between">
-            <TouchableOpacity 
+          {/* AI Features Row */}
+          <View style={styles.aiRow}>
+            <TouchableOpacity
               onPress={toggleRecording}
               disabled={isProcessingVoice || isScanning}
-              className={`flex-1 bg-white dark:bg-[#111] shadow-lg shadow-gray-200/50 dark:shadow-none border ${isRecording ? 'border-red-500 bg-red-50 dark:bg-red-500/20' : 'border-transparent dark:border-[#222]'} rounded-[24px] py-6 items-center justify-center flex-row`}
+              style={[
+                styles.aiBtn,
+                {
+                  backgroundColor: isRecording ? 'rgba(255,59,48,0.12)' : cardBg,
+                  borderColor: isRecording ? '#FF3B30' : separator,
+                }
+              ]}
             >
               {isProcessingVoice ? (
-                <ActivityIndicator color={isDark ? "#E11D48" : "#0EA5E9"} />
+                <ActivityIndicator color="#FF3B30" size="small" />
               ) : (
                 <>
-                  <Ionicons name="mic" size={24} color={isRecording ? "#EF4444" : (isDark ? "#E11D48" : "#000")} />
-                  <Text className={`ml-3 font-black text-lg ${isRecording ? 'text-red-500' : 'text-black dark:text-white'}`}>
-                    {isRecording ? 'STOP' : 'VOICE'}
+                  <View style={[styles.aiBtnIcon, { backgroundColor: isRecording ? 'rgba(255,59,48,0.15)' : 'rgba(0,122,255,0.1)' }]}>
+                    <Ionicons name={isRecording ? 'stop' : 'mic'} size={20} color={isRecording ? '#FF3B30' : '#007AFF'} />
+                  </View>
+                  <Text style={[styles.aiBtnText, { color: isRecording ? '#FF3B30' : textPrimary }]}>
+                    {isRecording ? 'Stop' : 'Voice'}
                   </Text>
+                  <Text style={[styles.aiBtnSub, { color: textSecondary }]}>AI input</Text>
                 </>
               )}
             </TouchableOpacity>
 
-            <View className="w-4" />
-            
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handleScanReceipt}
               disabled={isScanning || isProcessingVoice}
-              className="flex-1 bg-white dark:bg-[#111] shadow-lg shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222] rounded-[24px] py-6 items-center justify-center flex-row"
+              style={[styles.aiBtn, { backgroundColor: cardBg, borderColor: separator }]}
             >
               {isScanning ? (
-                <ActivityIndicator color={isDark ? "#E11D48" : "#0EA5E9"} />
+                <ActivityIndicator color="#007AFF" size="small" />
               ) : (
                 <>
-                  <Ionicons name="scan" size={24} color={isDark ? "#E11D48" : "#000"} />
-                  <Text className="text-black dark:text-white ml-3 font-black text-lg">SCAN</Text>
+                  <View style={[styles.aiBtnIcon, { backgroundColor: 'rgba(88,86,214,0.1)' }]}>
+                    <Ionicons name="scan" size={20} color="#5856D6" />
+                  </View>
+                  <Text style={[styles.aiBtnText, { color: textPrimary }]}>Scan</Text>
+                  <Text style={[styles.aiBtnSub, { color: textSecondary }]}>Receipt</Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
 
           {/* Save Button */}
-          <PremiumButton 
-            title="SAVE ENTRY" 
-            onPress={handleSave} 
-            isLoading={isLoading} 
-          />
+          <TouchableOpacity onPress={handleSave} disabled={isLoading} activeOpacity={0.85} style={styles.saveWrapper}>
+            <LinearGradient
+              colors={isExpense ? ['#FF3B30', '#FF6B6B'] : ['#34C759', '#30D158']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.saveBtn}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.saveBtnText}>Save Transaction</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
 
-          <View className="h-20" />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
+  headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  typeToggle: { flexDirection: 'row', marginHorizontal: 20, borderRadius: 14, padding: 4, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  typeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10, gap: 6 },
+  typeBtnText: { fontSize: 15, fontWeight: '700' },
+  amountCard: { marginHorizontal: 20, borderRadius: 20, padding: 24, marginBottom: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
+  amountLabel: { fontSize: 13, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 },
+  amountRow: { flexDirection: 'row', alignItems: 'center' },
+  currencySymbol: { fontSize: 40, fontWeight: '700', marginRight: 4 },
+  amountInput: { fontSize: 56, fontWeight: '700', letterSpacing: -2, minWidth: 120 },
+  amountDivider: { height: 3, width: 80, borderRadius: 2, marginTop: 12, opacity: 0.6 },
+  fieldLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
+  chipsRow: { flexDirection: 'row', gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  chipText: { fontSize: 14, fontWeight: '500' },
+  fieldsCard: { marginHorizontal: 20, borderRadius: 20, overflow: 'hidden', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
+  fieldRow: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 16 },
+  fieldInput: { fontSize: 16, fontWeight: '500', marginTop: 2 },
+  fieldSeparator: { height: StyleSheet.hairlineWidth, marginLeft: 52 },
+  aiRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 20 },
+  aiBtn: { flex: 1, borderRadius: 16, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 16, alignItems: 'center', gap: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+  aiBtnIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  aiBtnText: { fontSize: 15, fontWeight: '700' },
+  aiBtnSub: { fontSize: 12, fontWeight: '500' },
+  saveWrapper: { marginHorizontal: 20 },
+  saveBtn: { borderRadius: 16, paddingVertical: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 6 },
+  saveBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+});

@@ -49,6 +49,14 @@ interface AppState {
   insights: Insight[];
   isGeneratingInsights: boolean;
   generateInsights: (transactions: Transaction[]) => Promise<void>;
+  
+  // Premium Features
+  currency: string;
+  exchangeRates: Record<string, number>;
+  setCurrency: (currency: string) => void;
+  fetchExchangeRates: () => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -58,12 +66,19 @@ export const useStore = create<AppState>((set) => ({
   error: null,
   insights: [],
   isGeneratingInsights: false,
+  currency: 'USD',
+  exchangeRates: { 'USD': 1 },
 
   restoreSession: async () => {
     try {
       const storedUser = await AsyncStorage.getItem('user_session');
+      const storedCurrency = await AsyncStorage.getItem('user_currency');
+      
       if (storedUser) {
         set({ user: JSON.parse(storedUser) });
+      }
+      if (storedCurrency) {
+        set({ currency: storedCurrency });
       }
     } catch (error) {
       console.error('Failed to restore session:', error);
@@ -179,6 +194,52 @@ export const useStore = create<AppState>((set) => ({
       set({ insights: response.data.data, isGeneratingInsights: false });
     } catch (error: any) {
       set({ error: error.message || 'Failed to generate insights', isGeneratingInsights: false });
+    }
+  },
+
+  setCurrency: async (currency) => {
+    set({ currency });
+    await AsyncStorage.setItem('user_currency', currency);
+    useStore.getState().fetchExchangeRates(); // Fetch new rates when currency changes
+  },
+
+  fetchExchangeRates: async () => {
+    const { currency } = useStore.getState();
+    try {
+      // Using Frankfurter API (Free, no auth required, base EUR by default but we can request base)
+      const res = await axios.get(`https://api.frankfurter.app/latest?from=USD`);
+      // Frankfurter doesn't include the base in the rates object, so we add it manually
+      const rates = { ...res.data.rates, USD: 1 };
+      
+      // If the user selected a base currency other than USD, we just recalculate relative to USD 
+      // Actually, to make it simple, we store all rates relative to USD, and then in the UI we multiply by `exchangeRates[currency]`
+      set({ exchangeRates: rates });
+    } catch (error) {
+      console.error('Failed to fetch exchange rates', error);
+    }
+  },
+
+  deleteTransaction: async (id) => {
+    try {
+      await axios.delete(`${API_URL}/transactions/${id}`);
+      set((state) => ({
+        transactions: state.transactions.filter(t => t._id !== id)
+      }));
+      Toast.show({ type: 'success', text1: 'Deleted', text2: 'Transaction removed successfully' });
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to delete transaction' });
+    }
+  },
+
+  updateTransaction: async (id, data) => {
+    try {
+      const response = await axios.put(`${API_URL}/transactions/${id}`, data);
+      set((state) => ({
+        transactions: state.transactions.map(t => t._id === id ? response.data.data : t)
+      }));
+      Toast.show({ type: 'success', text1: 'Updated', text2: 'Transaction updated successfully' });
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update transaction' });
     }
   }
 }));

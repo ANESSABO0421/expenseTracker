@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useColorScheme } from 'nativewind';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { PieChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
 import AnimatedCard from '../components/AnimatedCard';
 
@@ -11,86 +12,128 @@ export default function AnalyticsScreen() {
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  // Generate insights on mount if empty, or just rely on manual refresh
+  const bg = isDark ? '#000000' : '#F2F2F7';
+  const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
+  const textPrimary = isDark ? '#FFFFFF' : '#1C1C1E';
+  const textSecondary = isDark ? '#8E8E93' : '#6C6C70';
+  const separator = isDark ? '#2C2C2E' : '#E5E5EA';
+
   useEffect(() => {
-    if (insights.length === 0) {
-      generateInsights(transactions);
-    }
+    if (insights.length === 0) generateInsights(transactions);
   }, [transactions.length, insights.length]);
 
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  // Pie chart data by category
+  const pieMap: Record<string, number> = {};
+  transactions.filter(t => t.type === 'expense').forEach(t => {
+    pieMap[t.category] = (pieMap[t.category] || 0) + t.amount;
+  });
+  const colors = ['#007AFF', '#FF3B30', '#34C759', '#FF9500', '#AF52DE'];
+  const pieData = Object.keys(pieMap).map((cat, i) => ({
+    value: pieMap[cat],
+    text: cat.substring(0, 4),
+    color: colors[i % colors.length],
+    label: cat,
+  }));
+
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+  const getIconColor = (color: string) => {
+    const map: Record<string, string> = { red: '#FF3B30', green: '#34C759', blue: '#007AFF', orange: '#FF9500', purple: '#AF52DE' };
+    return map[color] || '#8E8E93';
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F2F4F7] dark:bg-[#050505]" edges={['top']}>
-      {/* Header */}
-      <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-[#111]">
-        <Text className="text-black dark:text-white text-3xl font-black tracking-tighter">Insights</Text>
-        <TouchableOpacity 
-          onPress={toggleColorScheme}
-          className="w-12 h-12 rounded-full bg-white dark:bg-[#111] items-center justify-center shadow-sm shadow-gray-200 dark:shadow-none border border-transparent dark:border-[#222]"
-        >
-          <Ionicons name={isDark ? "sunny" : "moon"} size={22} color={isDark ? "#E11D48" : "#0EA5E9"} />
+    <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
+      <View style={[styles.header, { borderBottomColor: separator }]}>
+        <Text style={[styles.headerTitle, { color: textPrimary }]}>Analytics</Text>
+        <TouchableOpacity onPress={() => generateInsights(transactions)} style={[styles.iconBtn, { backgroundColor: cardBg }]}>
+          <Ionicons name="refresh" size={18} color="#007AFF" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 px-5 pt-6 pb-12" showsVerticalScrollIndicator={false}>
-        <View className="mb-8">
-          <Text className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest mb-1">AI Analysis</Text>
-          <Text className="text-black dark:text-white text-4xl font-black tracking-tighter leading-none">Smart Budget</Text>
-        </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
 
-        {isGeneratingInsights ? (
-          <View className="bg-white dark:bg-[#111] p-10 rounded-[40px] items-center justify-center mt-4 shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222]">
-            <ActivityIndicator size="large" color={isDark ? "#E11D48" : "#0EA5E9"} className="mb-6" />
-            <Text className="text-black dark:text-white text-2xl font-black tracking-tighter text-center">Analyzing Data</Text>
-            <Text className="text-gray-500 font-bold mt-2 text-center">Our AI is predicting your financial trends...</Text>
-          </View>
-        ) : (
-          <View>
-            {insights.map((insight, index) => {
-              
-              // Map text colors
-              const getIconBg = () => {
-                switch(insight.color) {
-                  case 'red': return 'bg-red-50 dark:bg-red-500/10';
-                  case 'green': return 'bg-green-50 dark:bg-green-500/10';
-                  case 'blue': return 'bg-blue-50 dark:bg-blue-500/10';
-                  case 'orange': return 'bg-orange-50 dark:bg-orange-500/10';
-                  case 'purple': return 'bg-purple-50 dark:bg-purple-500/10';
-                  default: return 'bg-gray-50 dark:bg-gray-500/10';
-                }
-              };
-
-              const getIconColor = () => {
-                switch(insight.color) {
-                  case 'red': return '#EF4444';
-                  case 'green': return '#10B981';
-                  case 'blue': return '#0EA5E9';
-                  case 'orange': return '#F59E0B';
-                  case 'purple': return '#8B5CF6';
-                  default: return '#6B7280';
-                }
-              };
-
-              return (
-                <AnimatedCard key={index} delay={(index + 1) * 100} className="mb-6">
-                  <View className="bg-white dark:bg-[#111] p-6 rounded-[32px] shadow-xl shadow-gray-200/50 dark:shadow-none border border-transparent dark:border-[#222] flex-row items-start">
-                    <View className={`w-14 h-14 ${getIconBg()} rounded-full items-center justify-center mr-5`}>
-                      <Ionicons name={insight.icon as any || "analytics"} size={28} color={getIconColor()} />
+        {/* Pie Chart */}
+        {pieData.length > 0 && (
+          <AnimatedCard delay={50}>
+            <View style={[styles.card, { backgroundColor: cardBg }]}>
+              <Text style={[styles.cardTitle, { color: textPrimary }]}>Expense Breakdown</Text>
+              <View style={styles.pieContainer}>
+                <PieChart
+                  data={pieData}
+                  donut
+                  showText
+                  textColor="white"
+                  radius={100}
+                  innerRadius={65}
+                  innerCircleColor={cardBg}
+                  centerLabelComponent={() => (
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ fontSize: 18, color: textPrimary, fontWeight: '700' }}>
+                        {pieData.length}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: textSecondary }}>categories</Text>
                     </View>
-                    <View className="flex-1">
-                      <Text className="text-black dark:text-white text-xl font-black mb-1">{insight.title}</Text>
-                      <Text className="text-gray-500 dark:text-gray-400 font-bold leading-5">{insight.message}</Text>
+                  )}
+                />
+                <View style={styles.pieLegend}>
+                  {pieData.slice(0, 4).map((item, i) => (
+                    <View key={i} style={styles.legendRow}>
+                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                      <Text style={[styles.legendLabel, { color: textSecondary }]}>{item.label}</Text>
                     </View>
-                  </View>
-                </AnimatedCard>
-              );
-            })}
-          </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </AnimatedCard>
         )}
 
-        <View className="h-12" />
+        {/* AI Insights */}
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>AI Insights</Text>
+
+        {isGeneratingInsights ? (
+          <View style={[styles.card, { backgroundColor: cardBg, alignItems: 'center', paddingVertical: 40 }]}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={[styles.loadingText, { color: textSecondary }]}>Analyzing your finances...</Text>
+          </View>
+        ) : (
+          insights.map((insight, index) => (
+            <AnimatedCard key={index} delay={(index + 1) * 80}>
+              <View style={[styles.insightCard, { backgroundColor: cardBg, borderBottomColor: separator }]}>
+                <View style={[styles.insightIcon, { backgroundColor: getIconColor(insight.color) + '15' }]}>
+                  <Ionicons name={(insight.icon as any) || 'analytics'} size={22} color={getIconColor(insight.color)} />
+                </View>
+                <View style={styles.insightContent}>
+                  <Text style={[styles.insightTitle, { color: textPrimary }]}>{insight.title}</Text>
+                  <Text style={[styles.insightMsg, { color: textSecondary }]}>{insight.message}</Text>
+                </View>
+              </View>
+            </AnimatedCard>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  card: { marginHorizontal: 20, marginBottom: 16, borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
+  cardTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
+  pieContainer: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+  pieLegend: { flex: 1, gap: 10 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendLabel: { fontSize: 13, fontWeight: '500' },
+  sectionTitle: { fontSize: 22, fontWeight: '700', paddingHorizontal: 20, marginBottom: 12, marginTop: 8 },
+  loadingText: { marginTop: 14, fontSize: 15, fontWeight: '500' },
+  insightCard: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  insightIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  insightContent: { flex: 1 },
+  insightTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  insightMsg: { fontSize: 14, lineHeight: 20 },
+});
