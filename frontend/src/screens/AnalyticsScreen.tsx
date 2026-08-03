@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
 import { useColorScheme } from 'nativewind';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { PieChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
 import AnimatedCard from '../components/AnimatedCard';
@@ -27,24 +28,45 @@ export default function AnalyticsScreen() {
     if (insights.length === 0) generateInsights(transactions);
   }, [transactions.length, insights.length]);
 
-  // Pie chart data by category
+  // Enhanced Pie chart data with premium gradients
   const pieMap: Record<string, number> = {};
   transactions.filter(t => t.type === 'expense').forEach(t => {
     pieMap[t.category] = (pieMap[t.category] || 0) + t.amount;
   });
-  const colors = ['#007AFF', '#FF3B30', '#34C759', '#FF9500', '#AF52DE'];
-  const pieData = Object.keys(pieMap).map((cat, i) => ({
-    value: pieMap[cat],
-    text: cat.substring(0, 4),
-    color: colors[i % colors.length],
-    label: cat,
-  }));
-
+  
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+  const colors = [
+    { color: '#FF2A54', gradientCenterColor: '#FF9B82' }, // Neon Red -> Peach
+    { color: '#00F2FE', gradientCenterColor: '#4FACFE' }, // Neon Cyan -> Blue
+    { color: '#FFD700', gradientCenterColor: '#FF8C00' }, // Gold -> Deep Orange
+    { color: '#B066FE', gradientCenterColor: '#63E2FF' }, // Purple -> Cyan
+    { color: '#00E676', gradientCenterColor: '#1DE9B6' }, // Neon Green -> Teal
+  ];
+
+  let maxVal = -1;
+  let maxIdx = -1;
+  const pieData = Object.keys(pieMap).map((cat, i) => {
+    const val = pieMap[cat];
+    if (val > maxVal) { maxVal = val; maxIdx = i; }
+    const c = colors[i % colors.length];
+    return {
+      value: val,
+      text: val > totalExpense * 0.08 ? Math.round((val / totalExpense) * 100) + '%' : '',
+      color: c.color,
+      gradientCenterColor: c.gradientCenterColor,
+      textColor: '#FFFFFF',
+      textBackgroundRadius: 12,
+      fontWeight: '800',
+      label: cat,
+      focused: false,
+    };
+  });
+  if (pieData[maxIdx]) pieData[maxIdx].focused = true;
 
   const getIconColor = (color: string) => {
     const map: Record<string, string> = { red: '#FF3B30', green: '#34C759', blue: '#007AFF', orange: '#FF9500', purple: '#AF52DE' };
-    return map[color] || '#8E8E93';
+    return map[color] || '#007AFF';
   };
 
   return (
@@ -61,35 +83,40 @@ export default function AnalyticsScreen() {
         {/* Pie Chart */}
         {pieData.length > 0 && (
           <AnimatedCard delay={50}>
-            <View style={[styles.card, { backgroundColor: cardBg }]}>
+            <LinearGradient
+              colors={isDark ? ['#2C2C2E', '#1C1C1E'] : ['#FFFFFF', '#F9FAFB']}
+              style={[styles.card, { borderWidth: 1, borderColor: isDark ? '#3A3A3C' : '#E5E5EA' }]}
+              start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+            >
               <View style={styles.cardHeader}>
                 <Text style={[styles.cardTitle, { color: textPrimary }]}>Expense Breakdown</Text>
                 {currency !== 'USD' && (
                   <TouchableOpacity 
                     onPress={() => setShowBaseCurrency(!showBaseCurrency)}
-                    style={[styles.currencyToggle, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }]}
+                    style={[styles.currencyToggle, { backgroundColor: isDark ? '#3A3A3C' : '#F2F2F7' }]}
                   >
                     <Ionicons name="swap-horizontal" size={14} color="#007AFF" />
                     <Text style={[styles.currencyToggleText, { color: textPrimary }]}>{displayCurrency}</Text>
                   </TouchableOpacity>
                 )}
               </View>
-              <View style={styles.pieWrapper}>
+              <View style={[styles.pieWrapper, { shadowColor: isDark ? pieData[maxIdx]?.color || '#00C6FF' : '#007AFF', shadowOpacity: 0.25, shadowRadius: 30, shadowOffset: { width: 0, height: 10 } }]}>
                 <PieChart
-                  data={pieData}
+                  data={pieData.map(d => ({ ...d, text: '' }))} // Remove inner text for ultra-clean ring
                   donut
-                  showText
-                  textColor="white"
-                  radius={110}
-                  innerRadius={75}
-                  innerCircleColor={cardBg}
-                  strokeWidth={3}
-                  strokeColor={cardBg}
+                  showGradient
+                  sectionAutoFocus
                   focusOnPress
+                  radius={115}
+                  innerRadius={85}
+                  innerCircleColor={isDark ? '#2C2C2E' : '#FFFFFF'} // Match the LinearGradient start color
+                  strokeWidth={isDark ? 6 : 4}
+                  strokeColor={isDark ? '#2C2C2E' : '#FFFFFF'}
+                  shadow={false} // Disable internal shadow, using wrapper shadow for glowing effect
                   centerLabelComponent={() => (
-                    <View style={{ alignItems: 'center' }}>
-                      <Text style={{ fontSize: 13, color: textSecondary, marginBottom: 4 }}>Total</Text>
-                      <Text style={{ fontSize: 20, color: textPrimary, fontWeight: '800' }}>
+                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 13, color: textSecondary, marginBottom: 2, fontWeight: '600' }}>Total Spent</Text>
+                      <Text style={{ fontSize: 24, color: textPrimary, fontWeight: '800' }}>
                         {formatCurrency(totalExpense, displayCurrency, exchangeRates)}
                       </Text>
                     </View>
@@ -98,13 +125,20 @@ export default function AnalyticsScreen() {
               </View>
               <View style={styles.pieLegendHorizontal}>
                 {pieData.map((item, i) => (
-                  <View key={i} style={styles.legendRow}>
-                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                    <Text style={[styles.legendLabel, { color: textSecondary }]}>{item.label}</Text>
+                  <View key={i} style={[styles.legendPill, { backgroundColor: isDark ? '#3A3A3C' : '#F2F2F7', borderWidth: 1, borderColor: isDark ? '#4A4A4C' : '#E5E5EA' }]}>
+                    <LinearGradient
+                      colors={[item.color, item.gradientCenterColor]}
+                      style={styles.legendDot}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    />
+                    <Text style={[styles.legendLabel, { color: textPrimary }]}>{item.label}</Text>
+                    <Text style={[styles.legendValue, { color: textSecondary }]}>
+                      {Math.round((item.value / totalExpense) * 100)}%
+                    </Text>
                   </View>
                 ))}
               </View>
-            </View>
+            </LinearGradient>
           </AnimatedCard>
         )}
 
@@ -119,9 +153,21 @@ export default function AnalyticsScreen() {
         ) : (
           insights.map((insight, index) => (
             <AnimatedCard key={index} delay={(index + 1) * 80}>
-              <View style={[styles.insightCard, { backgroundColor: cardBg, borderBottomColor: separator }]}>
-                <View style={[styles.insightIcon, { backgroundColor: getIconColor(insight.color) + '15' }]}>
-                  <Ionicons name={(insight.icon as any) || 'analytics'} size={22} color={getIconColor(insight.color)} />
+              <View style={[styles.insightCard, { backgroundColor: cardBg }]}>
+                <LinearGradient
+                  colors={[getIconColor(insight.color) + '15', 'transparent']}
+                  style={StyleSheet.absoluteFillObject}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+                <View style={[styles.insightIcon, { 
+                  backgroundColor: getIconColor(insight.color) + '20',
+                  shadowColor: getIconColor(insight.color), 
+                  shadowOpacity: 0.4, 
+                  shadowRadius: 10, 
+                  shadowOffset: { width: 0, height: 4 }
+                }]}>
+                  <Ionicons name={(insight.icon as any) || 'analytics'} size={24} color={getIconColor(insight.color)} />
                 </View>
                 <View style={styles.insightContent}>
                   <Text style={[styles.insightTitle, { color: textPrimary }]}>{insight.title}</Text>
@@ -147,15 +193,16 @@ const styles = StyleSheet.create({
   currencyToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   currencyToggleText: { fontSize: 12, fontWeight: '600' },
   pieWrapper: { alignItems: 'center', justifyContent: 'center', marginVertical: 10 },
-  pieLegendHorizontal: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 24 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendLabel: { fontSize: 12, fontWeight: '500' },
-  sectionTitle: { fontSize: 22, fontWeight: '700', paddingHorizontal: 20, marginBottom: 12, marginTop: 8 },
+  pieLegendHorizontal: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 28 },
+  legendPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 6 },
+  legendDot: { width: 12, height: 12, borderRadius: 6 },
+  legendLabel: { fontSize: 13, fontWeight: '600' },
+  legendValue: { fontSize: 13, fontWeight: '500' },
+  sectionTitle: { fontSize: 24, fontWeight: '800', paddingHorizontal: 20, marginBottom: 16, marginTop: 12 },
   loadingText: { marginTop: 14, fontSize: 15, fontWeight: '500' },
-  insightCard: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
-  insightIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  insightCard: { flexDirection: 'row', alignItems: 'flex-start', marginHorizontal: 20, marginBottom: 12, borderRadius: 20, padding: 20, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
+  insightIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   insightContent: { flex: 1 },
-  insightTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  insightMsg: { fontSize: 14, lineHeight: 20 },
+  insightTitle: { fontSize: 17, fontWeight: '800', marginBottom: 6, letterSpacing: -0.3 },
+  insightMsg: { fontSize: 14, lineHeight: 22 },
 });
