@@ -6,7 +6,7 @@ import { useStore } from '../store/useStore';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
-  const { user, logout, currency, setCurrency } = useStore();
+  const { user, logout, currency, setCurrency, enableConversion, setEnableConversion } = useStore();
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [modalVisible, setModalVisible] = useState(false);
@@ -80,7 +80,7 @@ export default function ProfileScreen() {
             <View key={i}>
               <TouchableOpacity style={styles.menuRow} onPress={item.action} activeOpacity={0.7}>
                 <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
-                  <Ionicons name={item.icon} size={18} color={item.color} />
+                  <Ionicons name={item.icon as any} size={18} color={item.color} />
                 </View>
                 <Text style={[styles.menuLabel, { color: textPrimary }]}>{item.label}</Text>
                 <Text style={[styles.menuValue, { color: textSecondary }]}>{item.value}</Text>
@@ -126,6 +126,21 @@ export default function ProfileScreen() {
                   {index < currencies.length - 1 && <View style={[styles.separator, { backgroundColor: separator, marginLeft: 20 }]} />}
                 </View>
               )}
+              ListFooterComponent={() => (
+                <View style={[styles.toggleContainer, { borderTopColor: separator }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.toggleTitle, { color: textPrimary }]}>Apply Exchange Rate</Text>
+                    <Text style={[styles.toggleDesc, { color: textSecondary }]}>Automatically convert previous transactions to the new currency.</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setEnableConversion(!enableConversion)}
+                    style={[styles.switchToggle, { backgroundColor: enableConversion ? '#34C759' : isDark ? '#3A3A3C' : '#E5E5EA' }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.switchHandle, { transform: [{ translateX: enableConversion ? 20 : 2 }] }]} />
+                  </TouchableOpacity>
+                </View>
+              )}
             />
           </View>
         </View>
@@ -162,4 +177,9 @@ const styles = StyleSheet.create({
   currencyName: { fontSize: 13 },
   currencyRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   currencySymbol: { fontSize: 16 },
+  toggleContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 24, marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  toggleTitle: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
+  toggleDesc: { fontSize: 13, lineHeight: 18, paddingRight: 20 },
+  switchToggle: { width: 44, height: 26, borderRadius: 13, justifyContent: 'center' },
+  switchHandle: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
 });

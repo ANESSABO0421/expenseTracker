@@ -10,7 +10,7 @@ import { formatCurrency } from '../utils/formatCurrency';
 export default function CalendarScreen({ navigation }: any) {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { transactions, currency, exchangeRates } = useStore();
+  const { transactions, currency, exchangeRates, enableConversion } = useStore();
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const bg = isDark ? '#000000' : '#F2F2F7';
@@ -66,6 +66,7 @@ export default function CalendarScreen({ navigation }: any) {
         {/* Calendar */}
         <View style={[styles.card, { backgroundColor: cardBg }]}>
           <Calendar
+            key={isDark ? 'dark' : 'light'}
             current={selectedDate}
             onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
             markingType="multi-dot"
@@ -92,7 +93,7 @@ export default function CalendarScreen({ navigation }: any) {
             </View>
             <Text style={[styles.summaryLabel, { color: textSecondary }]}>Income</Text>
             <Text style={[styles.summaryValue, { color: '#34C759' }]}>
-              {formatCurrency(currentTotals.income, currency, exchangeRates)}
+              {formatCurrency(currentTotals.income, currency, enableConversion ? exchangeRates : null)}
             </Text>
           </View>
           <View style={[styles.summaryCard, { backgroundColor: cardBg }]}>
@@ -101,7 +102,7 @@ export default function CalendarScreen({ navigation }: any) {
             </View>
             <Text style={[styles.summaryLabel, { color: textSecondary }]}>Expense</Text>
             <Text style={[styles.summaryValue, { color: '#FF3B30' }]}>
-              {formatCurrency(currentTotals.expense, currency, exchangeRates)}
+              {formatCurrency(currentTotals.expense, currency, enableConversion ? exchangeRates : null)}
             </Text>
           </View>
         </View>
@@ -133,7 +134,7 @@ export default function CalendarScreen({ navigation }: any) {
                   {item.description ? <Text style={[styles.txDesc, { color: textSecondary }]}>{item.description}</Text> : null}
                 </View>
                 <Text style={[styles.txAmount, { color: item.type === 'income' ? '#34C759' : textPrimary }]}>
-                  {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount, currency, exchangeRates)}
+                  {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount, currency, enableConversion ? exchangeRates : null)}
                 </Text>
               </TouchableOpacity>
             ))}

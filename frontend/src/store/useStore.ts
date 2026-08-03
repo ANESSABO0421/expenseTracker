@@ -53,7 +53,9 @@ interface AppState {
   // Premium Features
   currency: string;
   exchangeRates: Record<string, number>;
+  enableConversion: boolean;
   setCurrency: (currency: string) => void;
+  setEnableConversion: (val: boolean) => void;
   fetchExchangeRates: () => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>;
@@ -68,17 +70,22 @@ export const useStore = create<AppState>((set) => ({
   isGeneratingInsights: false,
   currency: 'USD',
   exchangeRates: { 'USD': 1 },
+  enableConversion: false,
 
   restoreSession: async () => {
     try {
       const storedUser = await AsyncStorage.getItem('user_session');
       const storedCurrency = await AsyncStorage.getItem('user_currency');
+      const storedConv = await AsyncStorage.getItem('user_enable_conv');
       
       if (storedUser) {
         set({ user: JSON.parse(storedUser) });
       }
       if (storedCurrency) {
         set({ currency: storedCurrency });
+      }
+      if (storedConv) {
+        set({ enableConversion: storedConv === 'true' });
       }
     } catch (error) {
       console.error('Failed to restore session:', error);
@@ -200,7 +207,11 @@ export const useStore = create<AppState>((set) => ({
   setCurrency: async (currency) => {
     set({ currency });
     await AsyncStorage.setItem('user_currency', currency);
-    useStore.getState().fetchExchangeRates(); // Fetch new rates when currency changes
+  },
+
+  setEnableConversion: async (val) => {
+    set({ enableConversion: val });
+    await AsyncStorage.setItem('user_enable_conv', val.toString());
   },
 
   fetchExchangeRates: async () => {

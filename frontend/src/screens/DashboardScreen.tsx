@@ -15,7 +15,7 @@ import { formatCurrency } from '../utils/formatCurrency';
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen({ navigation }: any) {
-  const { user, transactions, fetchTransactions, isLoading, currency, exchangeRates } = useStore();
+  const { user, transactions, fetchTransactions, isLoading, currency, exchangeRates, enableConversion } = useStore();
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -65,7 +65,7 @@ export default function DashboardScreen({ navigation }: any) {
             </Text>
           </View>
           <Text style={[styles.txAmount, { color: isIncome ? '#34C759' : textPrimary }]}>
-            {isIncome ? '+' : '-'}{formatCurrency(t.amount, currency, exchangeRates)}
+            {isIncome ? '+' : '-'}{formatCurrency(t.amount, currency, enableConversion ? exchangeRates : null)}
           </Text>
           <Ionicons name="chevron-forward" size={14} color={textSecondary} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
@@ -105,7 +105,7 @@ export default function DashboardScreen({ navigation }: any) {
             style={styles.balanceCard}
           >
             <Text style={styles.balanceLabel}>Total Balance</Text>
-            <Text style={styles.balanceAmount}>{formatCurrency(balance, currency, exchangeRates)}</Text>
+            <Text style={styles.balanceAmount}>{formatCurrency(balance, currency, enableConversion ? exchangeRates : null)}</Text>
             <View style={styles.balanceRow}>
               <View style={styles.balanceStat}>
                 <View style={styles.balanceStatIcon}>
@@ -113,7 +113,7 @@ export default function DashboardScreen({ navigation }: any) {
                 </View>
                 <View>
                   <Text style={styles.balanceStatLabel}>Income</Text>
-                  <Text style={styles.balanceStatValue}>{formatCurrency(totalIncome, currency, exchangeRates)}</Text>
+                  <Text style={styles.balanceStatValue}>{formatCurrency(totalIncome, currency, enableConversion ? exchangeRates : null)}</Text>
                 </View>
               </View>
               <View style={[styles.balanceDivider]} />
@@ -123,7 +123,7 @@ export default function DashboardScreen({ navigation }: any) {
                 </View>
                 <View>
                   <Text style={styles.balanceStatLabel}>Expenses</Text>
-                  <Text style={styles.balanceStatValue}>{formatCurrency(totalExpense, currency, exchangeRates)}</Text>
+                  <Text style={styles.balanceStatValue}>{formatCurrency(totalExpense, currency, enableConversion ? exchangeRates : null)}</Text>
                 </View>
               </View>
             </View>

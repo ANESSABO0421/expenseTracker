@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet
+  KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,8 @@ const CATEGORIES = {
 
 export default function AddTransactionScreen({ navigation }: any) {
   const { user, addTransaction, isLoading, currency, exchangeRates } = useStore();
+  // Read enableConversion separately with a safe default
+  const enableConversion = useStore((state) => state.enableConversion ?? false);
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
@@ -79,36 +81,97 @@ export default function AddTransactionScreen({ navigation }: any) {
       return;
     }
     if (user?._id) {
-      await addTransaction({ user: user._id, amount: Number(amount), type, category, description, receiptUrl });
+      const rate = exchangeRates && exchangeRates[currency] ? exchangeRates[currency] : 1;
+      const baseAmount = Number(amount); // Always save raw amount — conversion is display-only
+
+      await addTransaction({ user: user._id, amount: baseAmount, type, category, description, receiptUrl });
       Toast.show({ type: 'success', text1: 'Saved!', text2: 'Transaction added successfully.' });
       navigation.goBack();
     }
   };
 
-  const handleScanReceipt = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return;
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.5, base64: true });
-    if (!result.canceled && result.assets[0].base64) {
-      setIsScanning(true);
-      try {
-        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        const response = await fetch('http://192.168.1.4:5001/api/upload', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ base64Image })
-        });
-        const data = await response.json();
-        if (data.success) {
-          setReceiptUrl(data.data.receiptUrl);
-          setAmount('124.50'); setCategory('Groceries'); setDescription('Whole Foods Market receipt');
-          Toast.show({ type: 'success', text1: 'Receipt Scanned!', text2: 'Details extracted successfully.' });
-        }
-      } catch (err: any) {
-        Toast.show({ type: 'error', text1: 'Upload Failed', text2: err.message });
-      } finally {
-        setIsScanning(false);
+  const processImageResult = async (result: any) => {
+    if (result.canceled || !result.assets[0]?.base64) return;
+
+    setIsScanning(true);
+    try {
+      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+
+      const response = await fetch('http://192.168.1.4:5001/api/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Image }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Server error during receipt scan');
       }
+
+      const { receiptUrl: url, amount: extractedAmount, category: extractedCategory, description: extractedDesc } = data.data;
+
+      if (url) setReceiptUrl(url);
+      if (extractedAmount) setAmount(String(extractedAmount));
+      if (extractedCategory) setCategory(extractedCategory);
+      if (extractedDesc) setDescription(extractedDesc);
+
+      Toast.show({
+        type: 'success',
+        text1: '✅ Receipt Scanned!',
+        text2: `Extracted: ${extractedCategory} — ${currencySymbol}${extractedAmount}`,
+      });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Scan Failed',
+        text2: err.message || 'Could not read the receipt. Please try again.',
+      });
+    } finally {
+      setIsScanning(false);
     }
+  };
+
+  const handleScanReceipt = () => {
+    Alert.alert(
+      'Scan Receipt',
+      'Choose an option to scan your receipt',
+      [
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Camera access is required.' });
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              quality: 0.6,
+              base64: true,
+            });
+            processImageResult(result);
+          }
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Gallery access is required.' });
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              quality: 0.6,
+              base64: true,
+            });
+            processImageResult(result);
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
 
   const toggleRecording = async () => {

@@ -98,4 +98,65 @@ const generateInsights = async (transactions) => {
 
 module.exports = {
   generateInsights,
+  scanReceiptWithAI,
 };
+
+// ─── Receipt Scanner ─────────────────────────────────────────────────────────
+async function scanReceiptWithAI(base64Image) {
+  try {
+    // Strip the data URI prefix if present (Gemini takes raw base64)
+    const rawBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
+
+    const prompt = `You are an expert receipt analyzer. Look at this receipt image carefully and extract the transaction details.
+
+Return a JSON object with EXACTLY these fields:
+- "amount": the total amount as a number (e.g., 124.50). Extract the final total/grand total.
+- "category": a single short category from this list: Food, Transport, Shopping, Bills, Health, Entertainment, Travel, Groceries, Restaurant, Other
+- "description": a brief description of what was purchased (1-10 words, e.g., "Whole Foods grocery shopping")
+
+Respond ONLY with valid JSON, no explanation.`;
+
+    const responseSchema = {
+      type: 'object',
+      properties: {
+        amount:      { type: 'number',  description: 'Total amount from the receipt' },
+        category:    { type: 'string',  description: 'Transaction category' },
+        description: { type: 'string',  description: 'Short description of the purchase' },
+      },
+      required: ['amount', 'category', 'description'],
+    };
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: 'image/jpeg',
+                data: rawBase64,
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema,
+      },
+    });
+
+    const parsed = JSON.parse(response.text);
+    return {
+      amount:      parsed.amount      ?? 0,
+      category:    parsed.category    ?? 'Other',
+      description: parsed.description ?? '',
+    };
+  } catch (error) {
+    console.error('Receipt AI scan error:', error);
+    // Return safe fallback — frontend will show an error toast
+    throw new Error('Could not extract receipt details. Please enter them manually.');
+  }
+}

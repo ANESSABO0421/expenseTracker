@@ -6,6 +6,7 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const authRoutes = require('./routes/authRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const insightRoutes = require('./routes/insightRoutes');
+const scanReceiptRoute = require('./routes/scanReceiptRoute');
 const { errorHandler } = require('./middleware/errorMiddleware');
 
 // Load env vars
@@ -19,8 +20,8 @@ const PORT = process.env.PORT || 5001;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {
@@ -32,6 +33,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/insights', insightRoutes);
+app.use('/api/scan-receipt', scanReceiptRoute);
 
 // Error Middleware
 app.use(errorHandler);

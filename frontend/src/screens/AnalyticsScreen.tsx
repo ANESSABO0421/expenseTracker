@@ -6,11 +6,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { PieChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
 import AnimatedCard from '../components/AnimatedCard';
+import { formatCurrency } from '../utils/formatCurrency';
 
 export default function AnalyticsScreen() {
-  const { transactions, insights, isGeneratingInsights, generateInsights } = useStore();
-  const { colorScheme, toggleColorScheme } = useColorScheme();
+  const { transactions, insights, isGeneratingInsights, generateInsights, currency, exchangeRates } = useStore();
+  const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
+  
+  // Toggle for base vs selected currency
+  const [showBaseCurrency, setShowBaseCurrency] = useState(false);
+  const displayCurrency = showBaseCurrency ? 'USD' : currency;
 
   const bg = isDark ? '#000000' : '#F2F2F7';
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
@@ -57,33 +62,47 @@ export default function AnalyticsScreen() {
         {pieData.length > 0 && (
           <AnimatedCard delay={50}>
             <View style={[styles.card, { backgroundColor: cardBg }]}>
-              <Text style={[styles.cardTitle, { color: textPrimary }]}>Expense Breakdown</Text>
-              <View style={styles.pieContainer}>
+              <View style={styles.cardHeader}>
+                <Text style={[styles.cardTitle, { color: textPrimary }]}>Expense Breakdown</Text>
+                {currency !== 'USD' && (
+                  <TouchableOpacity 
+                    onPress={() => setShowBaseCurrency(!showBaseCurrency)}
+                    style={[styles.currencyToggle, { backgroundColor: isDark ? '#2C2C2E' : '#F2F2F7' }]}
+                  >
+                    <Ionicons name="swap-horizontal" size={14} color="#007AFF" />
+                    <Text style={[styles.currencyToggleText, { color: textPrimary }]}>{displayCurrency}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={styles.pieWrapper}>
                 <PieChart
                   data={pieData}
                   donut
                   showText
                   textColor="white"
-                  radius={100}
-                  innerRadius={65}
+                  radius={110}
+                  innerRadius={75}
                   innerCircleColor={cardBg}
+                  strokeWidth={3}
+                  strokeColor={cardBg}
+                  focusOnPress
                   centerLabelComponent={() => (
                     <View style={{ alignItems: 'center' }}>
-                      <Text style={{ fontSize: 18, color: textPrimary, fontWeight: '700' }}>
-                        {pieData.length}
+                      <Text style={{ fontSize: 13, color: textSecondary, marginBottom: 4 }}>Total</Text>
+                      <Text style={{ fontSize: 20, color: textPrimary, fontWeight: '800' }}>
+                        {formatCurrency(totalExpense, displayCurrency, exchangeRates)}
                       </Text>
-                      <Text style={{ fontSize: 11, color: textSecondary }}>categories</Text>
                     </View>
                   )}
                 />
-                <View style={styles.pieLegend}>
-                  {pieData.slice(0, 4).map((item, i) => (
-                    <View key={i} style={styles.legendRow}>
-                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                      <Text style={[styles.legendLabel, { color: textSecondary }]}>{item.label}</Text>
-                    </View>
-                  ))}
-                </View>
+              </View>
+              <View style={styles.pieLegendHorizontal}>
+                {pieData.map((item, i) => (
+                  <View key={i} style={styles.legendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                    <Text style={[styles.legendLabel, { color: textSecondary }]}>{item.label}</Text>
+                  </View>
+                ))}
               </View>
             </View>
           </AnimatedCard>
@@ -123,12 +142,15 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
   card: { marginHorizontal: 20, marginBottom: 16, borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
-  cardTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16 },
-  pieContainer: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  pieLegend: { flex: 1, gap: 10 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendLabel: { fontSize: 13, fontWeight: '500' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  cardTitle: { fontSize: 18, fontWeight: '700' },
+  currencyToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  currencyToggleText: { fontSize: 12, fontWeight: '600' },
+  pieWrapper: { alignItems: 'center', justifyContent: 'center', marginVertical: 10 },
+  pieLegendHorizontal: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, marginTop: 24 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendLabel: { fontSize: 12, fontWeight: '500' },
   sectionTitle: { fontSize: 22, fontWeight: '700', paddingHorizontal: 20, marginBottom: 12, marginTop: 8 },
   loadingText: { marginTop: 14, fontSize: 15, fontWeight: '500' },
   insightCard: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
