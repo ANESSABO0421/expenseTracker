@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ScrollView
@@ -46,7 +46,7 @@ export default function TransactionsScreen({ navigation }: any) {
     });
   }, [transactions, selectedMonth]);
 
-  const renderTransaction = ({ item: t, index }: { item: Transaction, index: number }) => {
+  const renderTransaction = useCallback(({ item: t, index }: { item: Transaction, index: number }) => {
     const isIncome = t.type === 'income';
     return (
       <AnimatedCard delay={index * 50}>
@@ -75,7 +75,7 @@ export default function TransactionsScreen({ navigation }: any) {
         </TouchableOpacity>
       </AnimatedCard>
     );
-  };
+  }, [currency, enableConversion, exchangeRates, isDark, navigation, separator, textPrimary, textSecondary]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
@@ -112,10 +112,14 @@ export default function TransactionsScreen({ navigation }: any) {
       {/* Transactions List */}
       <FlatList
         data={filteredTransactions}
-        keyExtractor={(item) => item._id || Math.random().toString()}
+        keyExtractor={(item, index) => item._id ? item._id.toString() : index.toString()}
         renderItem={renderTransaction}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="receipt-outline" size={48} color={textSecondary} style={{ marginBottom: 16, opacity: 0.5 }} />

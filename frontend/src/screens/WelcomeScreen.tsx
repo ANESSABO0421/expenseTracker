@@ -8,7 +8,7 @@ import { useStore } from '../store/useStore';
 import { useGoogleAuth } from '../utils/useGoogleAuth';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
-  FadeInDown, FadeInUp, Layout, SlideInRight,
+  FadeInDown, FadeInUp, Layout, SlideInRight, SlideInDown, SlideInUp,
   useAnimatedStyle, withSpring, withTiming, withRepeat,
   interpolateColor, useSharedValue, Easing
 } from 'react-native-reanimated';
@@ -144,11 +144,11 @@ export default function WelcomeScreen() {
 
       {/* ── Bottom sheet ── */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.bottomSheetContainer}
       >
         <Animated.View
-          entering={FadeInUp.delay(250).duration(700).springify().damping(16)}
+          entering={SlideInUp.delay(100).duration(350).easing(Easing.out(Easing.cubic))}
           style={[styles.bottomSheet, bottomSheetStyle]}
         >
           <ScrollView

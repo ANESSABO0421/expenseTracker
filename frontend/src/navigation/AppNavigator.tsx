@@ -27,10 +27,9 @@ const Tab = createBottomTabNavigator();
 const TAB_ITEMS = [
   { name: 'Home', icon: 'home', iconOutline: 'home-outline' },
   { name: 'Calendar', icon: 'calendar', iconOutline: 'calendar-outline' },
-  { name: 'Transactions', icon: 'list', iconOutline: 'list-outline' },
   { name: 'ADD', icon: 'add', iconOutline: 'add' }, // centre FAB placeholder
+  { name: 'Transactions', icon: 'list', iconOutline: 'list-outline' },
   { name: 'Analytics', icon: 'pie-chart', iconOutline: 'pie-chart-outline' },
-  { name: 'Profile', icon: 'person', iconOutline: 'person-outline' },
 ];
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, Image, TouchableOpacity,
-  ActivityIndicator, StyleSheet, Dimensions
+  ActivityIndicator, StyleSheet, Dimensions, LayoutAnimation
 } from 'react-native';
+import Animated, { useSharedValue, withRepeat, withSequence, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChart, BarChart } from 'react-native-gifted-charts';
@@ -20,29 +21,69 @@ export default function DashboardScreen({ navigation }: any) {
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  const handleToggleTheme = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    toggleColorScheme();
+  };
+
   const bg = isDark ? '#000000' : '#F2F2F7';
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const textPrimary = isDark ? '#FFFFFF' : '#1C1C1E';
   const textSecondary = isDark ? '#8E8E93' : '#6C6C70';
   const separator = isDark ? '#2C2C2E' : '#E5E5EA';
 
+  const pulseScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(0.6);
+
   useEffect(() => {
     if (user?._id) fetchTransactions(user._id);
+    
+    // Start avatar pulse animation
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.3, { duration: 1500, easing: Easing.out(Easing.ease) }),
+        withTiming(1, { duration: 0 })
+      ),
+      -1,
+      false
+    );
+    pulseOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 1500, easing: Easing.out(Easing.ease) }),
+        withTiming(0.6, { duration: 0 })
+      ),
+      -1,
+      false
+    );
   }, [user]);
 
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const balance = totalIncome - totalExpense;
+  const animatedPulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+    opacity: pulseOpacity.value,
+  }));
 
-  const expenses = transactions.filter(t => t.type === 'expense').slice(0, 8).reverse();
-  const lineData = expenses.length > 0
-    ? expenses.map(t => ({ value: t.amount, label: t.category.substring(0, 3) }))
-    : [{ value: 0, label: 'N/A' }];
-  const barData = expenses.length > 0
-    ? expenses.map(t => ({ value: t.amount, label: t.category.substring(0, 3), frontColor: '#007AFF' }))
-    : [{ value: 0, label: 'N/A', frontColor: '#007AFF' }];
+  const { totalIncome, totalExpense, balance } = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    transactions.forEach(t => {
+      if (t.type === 'income') income += t.amount;
+      else if (t.type === 'expense') expense += t.amount;
+    });
+    return { totalIncome: income, totalExpense: expense, balance: income - expense };
+  }, [transactions]);
 
-  const renderTransaction = (t: Transaction, index: number) => {
+  const { expenses, lineData, barData } = useMemo(() => {
+    const exps = transactions.filter(t => t.type === 'expense').slice(0, 8).reverse();
+    const lData = exps.length > 0
+      ? exps.map(t => ({ value: t.amount, label: t.category.substring(0, 3) }))
+      : [{ value: 0, label: 'N/A' }];
+    const bData = exps.length > 0
+      ? exps.map(t => ({ value: t.amount, label: t.category.substring(0, 3), frontColor: '#007AFF' }))
+      : [{ value: 0, label: 'N/A', frontColor: '#007AFF' }];
+    return { expenses: exps, lineData: lData, barData: bData };
+  }, [transactions]);
+
+  const renderTransaction = useCallback((t: Transaction, index: number) => {
     const isIncome = t.type === 'income';
     return (
       <AnimatedCard key={t._id} delay={index * 80}>
@@ -71,7 +112,7 @@ export default function DashboardScreen({ navigation }: any) {
         </TouchableOpacity>
       </AnimatedCard>
     );
-  };
+  }, [currency, enableConversion, exchangeRates, navigation, separator, textPrimary, textSecondary]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
@@ -86,13 +127,26 @@ export default function DashboardScreen({ navigation }: any) {
             </Text>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity onPress={toggleColorScheme} style={[styles.iconBtn, { backgroundColor: cardBg }]}>
+            <TouchableOpacity onPress={handleToggleTheme} style={[styles.iconBtn, { backgroundColor: cardBg }]}>
               <Ionicons name={isDark ? 'sunny' : 'moon'} size={18} color={isDark ? '#FFD60A' : '#5E5CE6'} />
             </TouchableOpacity>
-            <Image
-              source={{ uri: user?.avatar || 'https://cdn-icons-png.flaticon.com/512/847/847969.png' }}
-              style={styles.avatar}
-            />
+            <TouchableOpacity 
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('Profile')}
+              style={styles.avatarWrapper}
+            >
+              <Animated.View style={[
+                styles.avatarPulse,
+                { backgroundColor: isDark ? '#5E5CE6' : '#007AFF' },
+                animatedPulseStyle
+              ]} />
+              <Image
+                source={{ uri: user?.avatar || 'https://cdn-icons-png.flaticon.com/512/847/847969.png' }}
+                style={styles.avatar}
+              />
+              {/* Subtle indicator dot */}
+              <View style={[styles.avatarDot, { borderColor: bg }]} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -234,7 +288,39 @@ const styles = StyleSheet.create({
   headerName: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  avatar: { width: 42, height: 42, borderRadius: 21 },
+  avatarWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  avatarPulse: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 2,
+  },
+  avatarDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#34C759',
+    borderWidth: 2,
+    zIndex: 3,
+  },
   balanceCard: { marginHorizontal: 20, marginBottom: 16, borderRadius: 24, padding: 24 },
   balanceLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '500', marginBottom: 6 },
   balanceAmount: { color: '#FFFFFF', fontSize: 38, fontWeight: '700', letterSpacing: -1, marginBottom: 24 },
