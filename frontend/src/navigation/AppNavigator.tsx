@@ -17,6 +17,7 @@ import AddTransactionScreen from '../screens/AddTransactionScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import CalendarScreen from '../screens/CalendarScreen';
+import TransactionsScreen from '../screens/TransactionsScreen';
 import TransactionDetailsScreen from '../screens/TransactionDetailsScreen';
 import { useStore } from '../store/useStore';
 
@@ -26,6 +27,7 @@ const Tab = createBottomTabNavigator();
 const TAB_ITEMS = [
   { name: 'Home', icon: 'home', iconOutline: 'home-outline' },
   { name: 'Calendar', icon: 'calendar', iconOutline: 'calendar-outline' },
+  { name: 'Transactions', icon: 'list', iconOutline: 'list-outline' },
   { name: 'ADD', icon: 'add', iconOutline: 'add' }, // centre FAB placeholder
   { name: 'Analytics', icon: 'pie-chart', iconOutline: 'pie-chart-outline' },
   { name: 'Profile', icon: 'person', iconOutline: 'person-outline' },
@@ -169,10 +171,15 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   size={22}
                   color={isFocused ? activeTint : inactiveTint}
                 />
-                <Text style={[
-                  styles.tabLabel,
-                  { color: isFocused ? activeTint : inactiveTint, fontWeight: isFocused ? '700' : '400' }
-                ]}>
+                <Text 
+                  style={[
+                    styles.tabLabel,
+                    { color: isFocused ? activeTint : inactiveTint, fontWeight: isFocused ? '700' : '400' }
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.7}
+                >
                   {item.name}
                 </Text>
                 {isFocused && <View style={styles.activeDot} />}
@@ -193,6 +200,7 @@ function TabNavigator() {
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
+      <Tab.Screen name="Transactions" component={TransactionsScreen} />
       <Tab.Screen name="Analytics" component={AnalyticsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
@@ -257,10 +265,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 2,
     borderRadius: 16,
     gap: 3,
-    minWidth: 56,
+    width: '100%',
   },
   tabLabel: {
     fontSize: 10,
