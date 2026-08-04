@@ -156,7 +156,7 @@ export default function AnalyticsScreen() {
               <View style={[styles.insightCard, { backgroundColor: cardBg }]}>
                 <LinearGradient
                   colors={[getIconColor(insight.color) + '15', 'transparent']}
-                  style={StyleSheet.absoluteFillObject}
+                  style={StyleSheet.absoluteFill}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 />

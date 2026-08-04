@@ -8,7 +8,8 @@ import { useStore } from '../store/useStore';
 import { useGoogleAuth } from '../utils/useGoogleAuth';
 import Svg, { Path, G } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeInUp, FadeIn, Layout } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, ZoomIn, Layout } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
@@ -31,24 +32,45 @@ export default function WelcomeScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Deep Space Background */}
+      <LinearGradient
+        colors={['#0F172A', '#020617']}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+      />
+      
+      {/* Decorative Ambient Glowing Orbs */}
+      <View style={styles.glowTop} />
+      <View style={styles.glowBottom} />
+
+      {/* Floating Sparkles / Accents (Simulated by small glowing dots) */}
+      <View style={[styles.sparkle, { top: height * 0.15, left: width * 0.2 }]} />
+      <View style={[styles.sparkle, { top: height * 0.4, right: width * 0.15, transform: [{ scale: 1.5 }] }]} />
+      <View style={[styles.sparkle, { bottom: height * 0.3, left: width * 0.1, transform: [{ scale: 0.8 }] }]} />
+
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             
             {/* Logo Section */}
             <Animated.View 
-              entering={FadeIn.duration(1000)} 
+              entering={ZoomIn.duration(1000).springify().damping(12)} 
               style={styles.logoSection}
             >
-              <View style={styles.logoIcon}>
-                <Text style={styles.logoSymbol}>// SYS.TRACKER</Text>
-              </View>
-              <Text style={styles.tagline}>INTELLIGENT WEALTH PROTOCOL</Text>
+              <LinearGradient
+                colors={['#38BDF8', '#818CF8']}
+                style={styles.logoIcon}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="infinite" size={40} color="#FFFFFF" style={styles.logoShadow} />
+              </LinearGradient>
+              <Text style={styles.appName}>Antigravity Tracker</Text>
+              <Text style={styles.tagline}>Intelligent wealth management</Text>
             </Animated.View>
 
-            {/* Auth Card */}
-            <Animated.View entering={FadeInUp.delay(200).duration(600)} layout={Layout.duration(400)}>
-              <View style={styles.cyberCard}>
+            {/* Auth Glass Card */}
+            <Animated.View entering={FadeInUp.delay(300).duration(800).springify().damping(14)} layout={Layout.springify()}>
+              <BlurView intensity={35} tint="dark" style={styles.glassCard}>
                 
                 {/* Tabs */}
                 <View style={styles.tabs}>
@@ -70,48 +92,52 @@ export default function WelcomeScreen() {
 
                 {/* Fields */}
                 {!isLogin && (
-                  <Animated.View entering={FadeInDown.duration(400)} layout={Layout.duration(300)} style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>[ FULL NAME ]</Text>
+                  <Animated.View entering={FadeInDown.duration(400)} layout={Layout.springify()} style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Full Name</Text>
                     <TextInput
                       value={name} onChangeText={setName}
-                      placeholder="ENTER DESIGNATION" placeholderTextColor="#555555"
+                      placeholder="John Doe" placeholderTextColor="#64748B"
                       style={styles.input} autoCapitalize="words"
                     />
                   </Animated.View>
                 )}
 
-                <Animated.View layout={Layout.duration(300)} style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>[ EMAIL ADDRESS ]</Text>
+                <Animated.View layout={Layout.springify()} style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Email Address</Text>
                   <TextInput
                     value={email} onChangeText={setEmail}
-                    placeholder="ENTER IDENTIFIER" placeholderTextColor="#555555"
+                    placeholder="you@example.com" placeholderTextColor="#64748B"
                     keyboardType="email-address" autoCapitalize="none" style={styles.input}
                   />
                 </Animated.View>
 
-                <Animated.View layout={Layout.duration(300)} style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>[ SECURITY KEY ]</Text>
+                <Animated.View layout={Layout.springify()} style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Password</Text>
                   <View style={styles.passwordContainer}>
                     <TextInput
                       value={password} onChangeText={setPassword}
-                      placeholder="••••••••" placeholderTextColor="#555555"
+                      placeholder="••••••••" placeholderTextColor="#64748B"
                       secureTextEntry={!showPassword} autoCapitalize="none"
                       style={[styles.input, styles.passwordInput]}
                     />
                     <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
-                      <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={18} color="#888888" />
+                      <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={18} color="#94A3B8" />
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
 
                 {/* Submit */}
                 {isLoading ? (
-                  <ActivityIndicator size="large" color="#FFFFFF" style={{ marginTop: 12, marginBottom: 12 }} />
+                  <ActivityIndicator size="large" color="#38BDF8" style={{ marginTop: 12, marginBottom: 12 }} />
                 ) : (
                   <TouchableOpacity style={styles.submitBtnWrapper} onPress={handleSubmit} activeOpacity={0.85}>
-                    <View style={styles.submitBtn}>
-                      <Text style={styles.submitText}>{isLogin ? 'INITIALIZE' : 'REGISTER'}</Text>
-                    </View>
+                    <LinearGradient
+                      colors={['#38BDF8', '#6366F1']}
+                      style={styles.submitBtn}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.submitText}>{isLogin ? 'Sign In' : 'Create Account'}</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
 
@@ -135,7 +161,7 @@ export default function WelcomeScreen() {
                   <Text style={styles.googleText}>Continue with Google</Text>
                 </TouchableOpacity>
 
-              </View>
+              </BlurView>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -145,32 +171,36 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#020617' },
+  glowTop: { position: 'absolute', top: -height * 0.1, left: -width * 0.2, width: width * 1.2, height: width * 1.2, borderRadius: width * 0.6, backgroundColor: 'rgba(56, 189, 248, 0.15)', transform: [{ scale: 1.5 }] },
+  glowBottom: { position: 'absolute', bottom: -height * 0.1, right: -width * 0.2, width: width * 1.2, height: width * 1.2, borderRadius: width * 0.6, backgroundColor: 'rgba(129, 140, 248, 0.15)', transform: [{ scale: 1.5 }] },
+  sparkle: { position: 'absolute', width: 6, height: 6, borderRadius: 3, backgroundColor: '#38BDF8', shadowColor: '#38BDF8', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 10, elevation: 5 },
   scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  logoSection: { alignItems: 'flex-start', marginBottom: 40, borderLeftWidth: 2, borderColor: '#FFFFFF', paddingLeft: 16 },
-  logoIcon: { marginBottom: 8 },
-  logoSymbol: { color: '#FFFFFF', fontSize: 24, fontWeight: '700', letterSpacing: 2 },
-  tagline: { color: '#888888', fontSize: 11, fontWeight: '600', letterSpacing: 4 },
-  cyberCard: { padding: 28, backgroundColor: '#050505', borderWidth: 1, borderColor: '#333333', borderRadius: 0 },
-  tabs: { flexDirection: 'row', backgroundColor: '#000000', padding: 4, marginBottom: 32, borderWidth: 1, borderColor: '#222222' },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tabActive: { backgroundColor: '#1A1A1A' },
-  tabText: { fontSize: 12, fontWeight: '700', color: '#555555', letterSpacing: 2 },
-  tabTextActive: { color: '#FFFFFF' },
-  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1A0000', padding: 14, marginBottom: 18, borderWidth: 1, borderColor: '#FF0000' },
-  errorText: { flex: 1, color: '#FF4444', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
-  fieldGroup: { marginBottom: 24 },
-  fieldLabel: { color: '#888888', fontSize: 11, fontWeight: '700', marginBottom: 8, letterSpacing: 2 },
-  input: { backgroundColor: '#000000', paddingHorizontal: 16, paddingVertical: 14, color: '#FFFFFF', fontSize: 14, borderWidth: 1, borderColor: '#333333', letterSpacing: 1, borderRadius: 0 },
+  logoSection: { alignItems: 'center', marginBottom: 40 },
+  logoIcon: { width: 80, height: 80, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 20, shadowColor: '#38BDF8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 15 },
+  logoShadow: { textShadowColor: 'rgba(255,255,255,0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
+  appName: { color: '#FFFFFF', fontSize: 32, fontWeight: '800', letterSpacing: -0.5, marginBottom: 8 },
+  tagline: { color: '#94A3B8', fontSize: 16, fontWeight: '500' },
+  glassCard: { borderRadius: 36, padding: 30, overflow: 'hidden', backgroundColor: 'rgba(30, 41, 59, 0.4)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
+  tabs: { flexDirection: 'row', backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 20, padding: 6, marginBottom: 26, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  tab: { flex: 1, paddingVertical: 12, borderRadius: 16, alignItems: 'center' },
+  tabActive: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  tabText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+  tabTextActive: { color: '#F8FAFC' },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(239, 68, 68, 0.15)', borderRadius: 12, padding: 14, marginBottom: 18, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' },
+  errorText: { flex: 1, color: '#FCA5A5', fontSize: 14, fontWeight: '500' },
+  fieldGroup: { marginBottom: 20 },
+  fieldLabel: { color: '#94A3B8', fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  input: { backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, paddingHorizontal: 18, paddingVertical: 18, color: '#F8FAFC', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   passwordContainer: { position: 'relative' },
   passwordInput: { paddingRight: 50 },
   eyeBtn: { position: 'absolute', right: 16, top: 0, bottom: 0, justifyContent: 'center' },
-  submitBtnWrapper: { marginTop: 16 },
-  submitBtn: { backgroundColor: '#FFFFFF', paddingVertical: 16, alignItems: 'center', borderRadius: 0 },
-  submitText: { color: '#000000', fontSize: 14, fontWeight: '800', letterSpacing: 4 },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 14, marginVertical: 32 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#222222' },
-  dividerText: { color: '#555555', fontSize: 12, fontWeight: '700', letterSpacing: 2 },
-  googleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#000000', paddingVertical: 16, borderWidth: 1, borderColor: '#333333', borderRadius: 0 },
-  googleText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
+  submitBtnWrapper: { marginTop: 12, shadowColor: '#38BDF8', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 12 },
+  submitBtn: { borderRadius: 20, paddingVertical: 20, alignItems: 'center' },
+  submitText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', letterSpacing: 0.5 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 14, marginVertical: 28 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
+  dividerText: { color: '#64748B', fontSize: 14, fontWeight: '600' },
+  googleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, paddingVertical: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  googleText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });

@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   content: { padding: 24 },
   mainCard: { padding: 32, alignItems: 'center', borderRadius: 40 },
   iconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  amountText: { fontSize: 48, fontWeight: '900', trackingTighter: -2, marginBottom: 32 },
+  amountText: { fontSize: 48, fontWeight: '900', letterSpacing: -2, marginBottom: 32 },
   detailsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(150,150,150,0.2)' },
   detailLabel: { fontSize: 16, fontWeight: '600' },
   detailValue: { fontSize: 16, fontWeight: '700' },
