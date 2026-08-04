@@ -26,42 +26,39 @@ export default function SpendovaLogo({ theme = 'light', size = 64 }: LogoProps) 
   }));
 
   /**
-   * SPENDOVA LOGO — CENTERED INNER SYMBOL
-   *
-   * ViewBox: 0 0 64 64   →   center is (32, 32)
-   *
-   * Symbol horizontal span: x 19 → 45   →   midpoint = 32  ✓
-   * Symbol vertical span:   y 18 → 46   →   midpoint = 32  ✓
-   *
-   * 3 ascending bars + diagonal arrow leap to top-right
+   * SPENDOVA LOGO — MATCHING THE PROVIDED PURPLE/GLOW STYLE
    */
 
-  // Bar bottoms fixed at y=46, tops ascending
-  const BAR1 = "M19 46V40";   // short  (6 units tall),  x=19
-  const BAR2 = "M27 46V33";   // medium (13 units tall), x=27
-  const BAR3 = "M35 46V25";   // tall   (21 units tall), x=35
+  // Bar bottoms fixed at y=46 (with round linecaps, they actually extend down by half the stroke width)
+  const BAR1 = "M20 46V41";   // short  (5 units tall),  x=20
+  const BAR2 = "M28 46V33";   // medium (13 units tall), x=28
+  const BAR3 = "M36 46V23";   // tall   (23 units tall), x=36
 
   // Arrow shoots diagonally from top of BAR3 to top-right
-  const ARROW_STEM = "M35 25L45 18";
-  // Arrowhead — two short lines from the tip
-  const ARROW_HEAD = "M45 18L39 18M45 18L45 24";
+  const ARROW_STEM = "M36 23L45 16";
+  // Arrowhead — thicker and pointing up-right
+  const ARROW_HEAD = "M45 16L38 16M45 16L45 23";
 
   // Outer hexagon shape
   const HEX = "M32 4L56 18V46L32 60L8 46V18L32 4Z";
 
+  // Inner hexagon shape for the border highlight
+  const INNER_HEX = "M32 9L52 20.5V43.5L32 55L12 43.5V20.5L32 9Z";
+
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
 
-      {/* ── LIGHT THEME ── Deep Indigo → Violet */}
+      {/* ── LIGHT THEME ── Vibrant Purple (matching user image) */}
       <Animated.View style={lightStyle}>
         <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
           <Defs>
-            <LinearGradient id="lgHexL" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#4F46E5" />
-              <Stop offset="100%" stopColor="#7C3AED" />
+            <LinearGradient id="lgHexL" x1="0%" y1="0%" x2="0%" y2="100%">
+              {/* Very subtle gradient, looks almost solid vibrant purple */}
+              <Stop offset="0%" stopColor="#7B52FB" />
+              <Stop offset="100%" stopColor="#6C3CE8" />
             </LinearGradient>
             <LinearGradient id="lgBarsL" x1="0%" y1="100%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.6" />
+              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.75" />
               <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="1" />
             </LinearGradient>
           </Defs>
@@ -69,26 +66,26 @@ export default function SpendovaLogo({ theme = 'light', size = 64 }: LogoProps) 
           {/* Filled hexagon background */}
           <Path d={HEX} fill="url(#lgHexL)" />
 
-          {/* Subtle inner hex stroke for depth */}
+          {/* Distinct inner hex stroke (matching the image's lighter border) */}
           <Path
-            d="M32 10L52 21V43L32 54L12 43V21L32 10Z"
-            stroke="rgba(255,255,255,0.15)"
-            strokeWidth="1"
+            d={INNER_HEX}
+            stroke="rgba(255,255,255,0.25)"
+            strokeWidth="1.5"
             fill="none"
           />
 
-          {/* Rising bar chart */}
-          <Path d={BAR1} stroke="url(#lgBarsL)" strokeWidth="3.5" strokeLinecap="round" />
-          <Path d={BAR2} stroke="url(#lgBarsL)" strokeWidth="3.5" strokeLinecap="round" />
-          <Path d={BAR3} stroke="url(#lgBarsL)" strokeWidth="3.5" strokeLinecap="round" />
+          {/* Rising bar chart - THICKER AND ROUNDER */}
+          <Path d={BAR1} stroke="url(#lgBarsL)" strokeWidth="4.5" strokeLinecap="round" />
+          <Path d={BAR2} stroke="url(#lgBarsL)" strokeWidth="4.5" strokeLinecap="round" />
+          <Path d={BAR3} stroke="url(#lgBarsL)" strokeWidth="4.5" strokeLinecap="round" />
 
           {/* Diagonal arrow leap */}
-          <Path d={ARROW_STEM} stroke="url(#lgBarsL)" strokeWidth="3" strokeLinecap="round" />
-          <Path d={ARROW_HEAD} stroke="url(#lgBarsL)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d={ARROW_STEM} stroke="url(#lgBarsL)" strokeWidth="4" strokeLinecap="round" />
+          <Path d={ARROW_HEAD} stroke="url(#lgBarsL)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </Animated.View>
 
-      {/* ── DARK THEME ── Cyan → Emerald neon glow */}
+      {/* ── DARK THEME ── Cyan → Emerald neon glow (Thicker lines to match) */}
       <Animated.View style={darkStyle}>
         <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
           <Defs>
@@ -97,7 +94,7 @@ export default function SpendovaLogo({ theme = 'light', size = 64 }: LogoProps) 
               <Stop offset="100%" stopColor="#059669" />
             </LinearGradient>
             <LinearGradient id="lgBarsD" x1="0%" y1="100%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="#A7F3D0" stopOpacity="0.8" />
+              <Stop offset="0%" stopColor="#A7F3D0" stopOpacity="0.85" />
               <Stop offset="100%" stopColor="#ECFDF5" stopOpacity="1" />
             </LinearGradient>
           </Defs>
@@ -107,20 +104,20 @@ export default function SpendovaLogo({ theme = 'light', size = 64 }: LogoProps) 
 
           {/* Subtle inner hex stroke for depth */}
           <Path
-            d="M32 10L52 21V43L32 54L12 43V21L32 10Z"
-            stroke="rgba(255,255,255,0.12)"
-            strokeWidth="1"
+            d={INNER_HEX}
+            stroke="rgba(255,255,255,0.15)"
+            strokeWidth="1.5"
             fill="none"
           />
 
           {/* Rising bar chart */}
-          <Path d={BAR1} stroke="url(#lgBarsD)" strokeWidth="3.5" strokeLinecap="round" />
-          <Path d={BAR2} stroke="url(#lgBarsD)" strokeWidth="3.5" strokeLinecap="round" />
-          <Path d={BAR3} stroke="url(#lgBarsD)" strokeWidth="3.5" strokeLinecap="round" />
+          <Path d={BAR1} stroke="url(#lgBarsD)" strokeWidth="4.5" strokeLinecap="round" />
+          <Path d={BAR2} stroke="url(#lgBarsD)" strokeWidth="4.5" strokeLinecap="round" />
+          <Path d={BAR3} stroke="url(#lgBarsD)" strokeWidth="4.5" strokeLinecap="round" />
 
           {/* Diagonal arrow leap */}
-          <Path d={ARROW_STEM} stroke="url(#lgBarsD)" strokeWidth="3" strokeLinecap="round" />
-          <Path d={ARROW_HEAD} stroke="url(#lgBarsD)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d={ARROW_STEM} stroke="url(#lgBarsD)" strokeWidth="4" strokeLinecap="round" />
+          <Path d={ARROW_HEAD} stroke="url(#lgBarsD)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </Animated.View>
 
