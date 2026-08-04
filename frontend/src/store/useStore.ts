@@ -6,7 +6,7 @@ import Toast from 'react-native-toast-message';
 
 // Set this to your computer's local WiFi IP address if testing on a physical device
 // Your Metro bundler runs on 192.168.1.4, so we use that.
-const API_URL = 'http://192.168.1.4:5001/api';
+const API_URL = 'https://expensetracker-4g98.onrender.com/api';
 
 export interface User {
   _id: string;
