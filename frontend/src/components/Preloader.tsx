@@ -1,153 +1,346 @@
 import React, { useEffect, useRef } from 'react';
-import { Text, Animated, View, Easing } from 'react-native';
-import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { View, Text, Animated, Easing, StyleSheet, Dimensions } from 'react-native';
+import Svg, {
+  Circle, Path, Defs, LinearGradient, Stop, G
+} from 'react-native-svg';
+import { useStore } from '../store/useStore';
+import SpendovaLogo from './SpendovaLogo';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
 interface PreloaderProps {
   onFinish: () => void;
 }
 
 export default function Preloader({ onFinish }: PreloaderProps) {
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const strokeAnim = useRef(new Animated.Value(283)).current; // 2 * PI * r (r=45) = 282.74
-  const scaleAnim = useRef(new Animated.Value(0.7)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
+  const { theme } = useStore();
+  const isDark = theme === 'dark';
+
+  // --- Animation values ---
   const containerOpacity = useRef(new Animated.Value(1)).current;
 
+  // Outer ring rotation
+  const outerRotate = useRef(new Animated.Value(0)).current;
+  // Inner ring rotation (counter-clockwise)
+  const innerRotate = useRef(new Animated.Value(0)).current;
+  // Stroke dash fill (0→full arc)
+  const outerDash = useRef(new Animated.Value(251)).current;   // 2π×40
+  const innerDash = useRef(new Animated.Value(157)).current;   // 2π×25
+
+  // Logo scale + opacity
+  const logoScale = useRef(new Animated.Value(0.4)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+
+  // Text opacity
+  const nameOpacity = useRef(new Animated.Value(0)).current;
+  const tagOpacity = useRef(new Animated.Value(0)).current;
+
+  // Three staggered dots pulse
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  // Shimmer line translate
+  const shimmer = useRef(new Animated.Value(-SCREEN_W)).current;
+
   useEffect(() => {
-    // 1. Rotation animation
+    // ── Outer ring: continuous rotation + arc fill ──
     Animated.loop(
-      Animated.timing(rotateAnim, {
+      Animated.timing(outerRotate, {
         toValue: 1,
-        duration: 2000,
+        duration: 3000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
     ).start();
 
-    // 2. Stroke drawing animation (drawing the outer ring)
-    Animated.timing(strokeAnim, {
-      toValue: 70, // Leaves 70 of the stroke length drawn, animating from 283 (fully empty)
-      duration: 2000,
-      useNativeDriver: true,
-    }).start();
-
-    // 3. Logo path scale & fade in
-    Animated.parallel([
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        tension: 40,
+    Animated.loop(
+      Animated.timing(innerRotate, {
+        toValue: -1,
+        duration: 2200,
+        easing: Easing.linear,
         useNativeDriver: true,
       })
-    ]).start();
+    ).start();
 
-    // 4. Text fade in
-    Animated.timing(textOpacity, {
-      toValue: 1,
-      duration: 1000,
-      delay: 800,
+    Animated.timing(outerDash, {
+      toValue: 30,
+      duration: 2000,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
 
-    // 5. Egress fade out and proceed to app
+    Animated.timing(innerDash, {
+      toValue: 20,
+      duration: 1800,
+      delay: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    // ── Logo zoom in ──
+    Animated.parallel([
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 7,
+        tension: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 900,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // ── Text cascade ──
+    Animated.sequence([
+      Animated.delay(900),
+      Animated.timing(nameOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.delay(200),
+      Animated.timing(tagOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+
+    // ── Dot pulse loop (staggered) ──
+    const pulse = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.3, duration: 400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        ])
+      );
+
+    pulse(dot1, 1200).start();
+    pulse(dot2, 1400).start();
+    pulse(dot3, 1600).start();
+
+    // ── Shimmer bar ──
+    Animated.loop(
+      Animated.timing(shimmer, {
+        toValue: SCREEN_W,
+        duration: 2500,
+        delay: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    // ── Fade out & finish ──
     const timeout = setTimeout(() => {
       Animated.timing(containerOpacity, {
         toValue: 0,
-        duration: 600,
+        duration: 700,
+        easing: Easing.in(Easing.quad),
         useNativeDriver: true,
-      }).start(() => {
-        onFinish();
-      });
-    }, 3500);
+      }).start(() => onFinish());
+    }, 3600);
 
     return () => clearTimeout(timeout);
   }, []);
 
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const spinOuter = outerRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const spinInner = innerRotate.interpolate({ inputRange: [-1, 0], outputRange: ['-360deg', '0deg'] });
+
+  const bgColor = isDark ? '#070711' : '#F8FAFF';
+  const primaryStart = isDark ? '#06B6D4' : '#4F46E5';
+  const primaryEnd = isDark ? '#10B981' : '#7C3AED';
+  const textPrimary = isDark ? '#FFFFFF' : '#1E1B4B';
+  const textAccent = isDark ? '#34D399' : '#4F46E5';
 
   return (
-    <Animated.View 
-      style={{ opacity: containerOpacity, flex: 1 }}
-      className="bg-[#0F0F13] items-center justify-center"
-    >
-      <View className="relative w-40 h-40 items-center justify-center">
-        {/* Rotating Outer Progress Circle */}
-        <AnimatedSvg 
-          width="120" 
-          height="120" 
-          viewBox="0 0 100 100"
-          style={{ transform: [{ rotate: spin }] }}
-          className="absolute"
-        >
-          <Defs>
-            <LinearGradient id="circleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#6366F1" stopOpacity="1" />
-              <Stop offset="100%" stopColor="#10B981" stopOpacity="0.2" />
-            </LinearGradient>
-          </Defs>
-          {/* Background track */}
-          <Circle 
-            cx="50" 
-            cy="50" 
-            r="45" 
-            stroke="#1A1A24" 
-            strokeWidth="3" 
-            fill="none" 
-          />
-          {/* Animated drawing circle */}
-          <AnimatedCircle
-            cx="50"
-            cy="50"
-            r="45"
-            stroke="url(#circleGrad)"
-            strokeWidth="4"
-            fill="none"
-            strokeDasharray="283"
-            strokeDashoffset={strokeAnim}
-            strokeLinecap="round"
-          />
-        </AnimatedSvg>
+    <Animated.View style={[styles.root, { opacity: containerOpacity, backgroundColor: bgColor }]}>
 
-        {/* Center Glowing Logo Icon */}
-        <Animated.View 
-          style={{ 
-            opacity: opacityAnim,
-            transform: [{ scale: scaleAnim }]
-          }}
-          className="w-20 h-20 items-center justify-center rounded-full bg-[#1A1A24] border border-[#6366F1]/20 shadow-2xl shadow-indigo-500/30"
-        >
-          <Svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+      {/* ── Full-screen shimmer overlay ── */}
+      <Animated.View
+        style={[
+          styles.shimmerBar,
+          { transform: [{ translateX: shimmer }] },
+          isDark ? styles.shimmerDark : styles.shimmerLight,
+        ]}
+      />
+
+      {/* ── Double spinning rings + logo ── */}
+      <View style={styles.ringContainer}>
+
+        {/* Outer ring */}
+        <Animated.View style={[styles.ringWrap, { transform: [{ rotate: spinOuter }] }]}>
+          <Svg width={200} height={200} viewBox="0 0 100 100">
             <Defs>
-              <LinearGradient id="dollarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <Stop offset="0%" stopColor="#6366F1" />
-                <Stop offset="100%" stopColor="#10B981" />
+              <LinearGradient id="outerG" x1="0%" y1="0%" x2="100%" y2="100%">
+                <Stop offset="0%" stopColor={primaryStart} stopOpacity="1" />
+                <Stop offset="100%" stopColor={primaryEnd} stopOpacity="0.1" />
               </LinearGradient>
             </Defs>
-            <Path 
-              d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2.01 12 2ZM13.54 16.4C13.54 17.39 12.78 18.06 11.66 18.16V19.5H10.15V18.14C8.94 18.01 7.96 17.17 7.82 15.93H9.49C9.62 16.51 10.09 16.94 10.87 16.94C11.69 16.94 12.13 16.53 12.13 15.97C12.13 15.34 11.66 14.97 10.74 14.65C9.28 14.13 7.91 13.43 7.91 11.78C7.91 10.3 8.94 9.49 10.15 9.32V8H11.66V9.32C12.76 9.47 13.56 10.22 13.68 11.4H12.01C11.9 10.87 11.49 10.54 10.81 10.54C10.09 10.54 9.68 10.9 9.68 11.41C9.68 11.99 10.15 12.3 11.16 12.65C12.64 13.15 13.54 13.99 13.54 15.48V16.4Z" 
-              fill="url(#dollarGrad)"
+            {/* Track */}
+            <Circle cx="50" cy="50" r="40" stroke={isDark ? '#1E1B4B' : '#E0E7FF'} strokeWidth="3" fill="none" />
+            {/* Arc */}
+            <AnimatedCircle
+              cx="50" cy="50" r="40"
+              stroke="url(#outerG)"
+              strokeWidth="4"
+              fill="none"
+              strokeDasharray="251"
+              strokeDashoffset={outerDash}
+              strokeLinecap="round"
+              rotation="-90"
+              origin="50,50"
             />
           </Svg>
         </Animated.View>
+
+        {/* Inner ring */}
+        <Animated.View style={[styles.innerRingWrap, { transform: [{ rotate: spinInner }] }]}>
+          <Svg width={130} height={130} viewBox="0 0 100 100">
+            <Defs>
+              <LinearGradient id="innerG" x1="100%" y1="0%" x2="0%" y2="100%">
+                <Stop offset="0%" stopColor={primaryEnd} stopOpacity="1" />
+                <Stop offset="100%" stopColor={primaryStart} stopOpacity="0.15" />
+              </LinearGradient>
+            </Defs>
+            {/* Track */}
+            <Circle cx="50" cy="50" r="25" stroke={isDark ? '#1E293B' : '#EDE9FE'} strokeWidth="2.5" fill="none" />
+            {/* Arc */}
+            <AnimatedCircle
+              cx="50" cy="50" r="25"
+              stroke="url(#innerG)"
+              strokeWidth="3.5"
+              fill="none"
+              strokeDasharray="157"
+              strokeDashoffset={innerDash}
+              strokeLinecap="round"
+              rotation="-90"
+              origin="50,50"
+            />
+          </Svg>
+        </Animated.View>
+
+        {/* Centre logo */}
+        <Animated.View
+          style={[
+            styles.logoCenter,
+            {
+              opacity: logoOpacity,
+              transform: [{ scale: logoScale }],
+              backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+              shadowColor: primaryStart,
+            },
+          ]}
+        >
+          <SpendovaLogo theme={theme} size={56} />
+        </Animated.View>
       </View>
 
-      {/* Premium Typography */}
-      <Animated.View style={{ opacity: textOpacity }} className="mt-8 items-center">
-        <Text className="text-white text-2xl font-bold tracking-[8px]">EXPENSE</Text>
-        <Text className="text-[#10B981] text-sm font-semibold tracking-[6px] mt-2">TRACKER</Text>
-      </Animated.View>
+      {/* ── App Name ── */}
+      <Animated.Text style={[styles.appName, { opacity: nameOpacity, color: textPrimary }]}>
+        Spendova
+      </Animated.Text>
+
+      {/* ── Tagline ── */}
+      <Animated.Text style={[styles.tagline, { opacity: tagOpacity, color: textAccent }]}>
+        Intelligent Wealth
+      </Animated.Text>
+
+      {/* ── Progress dots ── */}
+      <View style={styles.dotsRow}>
+        {[dot1, dot2, dot3].map((dot, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              styles.dot,
+              {
+                opacity: dot,
+                backgroundColor: i === 1 ? primaryEnd : primaryStart,
+                transform: [{ scale: dot.interpolate({ inputRange: [0.3, 1], outputRange: [0.8, 1.3] }) }],
+              },
+            ]}
+          />
+        ))}
+      </View>
+
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  shimmerBar: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 80,
+    zIndex: 0,
+  },
+  shimmerLight: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  shimmerDark: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  ringContainer: {
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    zIndex: 1,
+  },
+  ringWrap: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerRingWrap: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoCenter: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 16,
+  },
+  appName: {
+    marginTop: 40,
+    fontSize: 36,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    zIndex: 1,
+  },
+  tagline: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    zIndex: 1,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 48,
+    zIndex: 1,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+});

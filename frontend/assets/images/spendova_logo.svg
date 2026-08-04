@@ -1,0 +1,32 @@
+<svg width="1024" height="1024" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lgHexL" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+    <linearGradient id="lgBarsL" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Filled hexagon background -->
+  <path d="M32 4L56 18V46L32 60L8 46V18L32 4Z" fill="url(#lgHexL)" />
+
+  <!-- Subtle inner hex stroke for depth -->
+  <path
+    d="M32 10L52 21V43L32 54L12 43V21L32 10Z"
+    stroke="rgba(255,255,255,0.15)"
+    stroke-width="1"
+    fill="none"
+  />
+
+  <!-- Rising bar chart -->
+  <path d="M19 46V40" stroke="url(#lgBarsL)" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M27 46V33" stroke="url(#lgBarsL)" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M35 46V25" stroke="url(#lgBarsL)" stroke-width="3.5" stroke-linecap="round" />
+
+  <!-- Diagonal arrow leap -->
+  <path d="M35 25L45 18" stroke="url(#lgBarsL)" stroke-width="3" stroke-linecap="round" />
+  <path d="M45 18L39 18M45 18L45 24" stroke="url(#lgBarsL)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

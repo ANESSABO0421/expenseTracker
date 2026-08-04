@@ -200,11 +200,7 @@ function TabNavigator() {
 }
 
 export default function AppNavigator() {
-  const { user, restoreSession } = useStore();
-
-  useEffect(() => {
-    restoreSession();
-  }, []);
+  const { user } = useStore();
 
   return (
     <NavigationContainer>

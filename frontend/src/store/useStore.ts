@@ -59,6 +59,10 @@ interface AppState {
   fetchExchangeRates: () => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<Transaction>) => Promise<void>;
+
+  // Global Theme
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -71,12 +75,22 @@ export const useStore = create<AppState>((set) => ({
   currency: 'USD',
   exchangeRates: { 'USD': 1 },
   enableConversion: false,
+  theme: 'light',
+
+  toggleTheme: () => {
+    set((state) => {
+      const newTheme = state.theme === 'light' ? 'dark' : 'light';
+      AsyncStorage.setItem('app_theme', newTheme);
+      return { theme: newTheme };
+    });
+  },
 
   restoreSession: async () => {
     try {
       const storedUser = await AsyncStorage.getItem('user_session');
       const storedCurrency = await AsyncStorage.getItem('user_currency');
       const storedConv = await AsyncStorage.getItem('user_enable_conv');
+      const storedTheme = await AsyncStorage.getItem('app_theme') as 'light' | 'dark' | null;
       
       if (storedUser) {
         set({ user: JSON.parse(storedUser) });
@@ -86,6 +100,9 @@ export const useStore = create<AppState>((set) => ({
       }
       if (storedConv) {
         set({ enableConversion: storedConv === 'true' });
+      }
+      if (storedTheme) {
+        set({ theme: storedTheme });
       }
     } catch (error) {
       console.error('Failed to restore session:', error);
