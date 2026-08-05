@@ -13,8 +13,11 @@ const getRedirectUri = (clientId?: string) => {
   return `com.googleusercontent.apps.${parts[0]}:/oauth2redirect`;
 };
 
-const iosRedirectUri = getRedirectUri(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID);
-const androidRedirectUri = getRedirectUri(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID);
+const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '802819595641-cujlud3r1onovi2ue2ukncmnq1rnt9sc.apps.googleusercontent.com';
+const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '802819595641-csin72b5gufoqkl8t62sb6ul9u1iesi7.apps.googleusercontent.com';
+
+const iosRedirectUri = getRedirectUri(IOS_CLIENT_ID);
+const androidRedirectUri = getRedirectUri(ANDROID_CLIENT_ID);
 
 const isStaleAuthCallback = (error: unknown) =>
   error instanceof Error &&
@@ -28,8 +31,8 @@ export const useGoogleAuth = () => {
   console.log('Using Redirect URI:', redirectUri ?? 'Expo default for this platform');
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID, // Masquerade as iOS Client to bypass Google restriction
+    iosClientId: IOS_CLIENT_ID,
+    androidClientId: IOS_CLIENT_ID, // Masquerade as iOS Client to bypass Google restriction
     redirectUri,
   });
 
