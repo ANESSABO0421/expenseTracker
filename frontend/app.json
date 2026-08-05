@@ -24,8 +24,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.aneesaboobacker.frontend",
       "infoPlist": {
-        "NSSpeechRecognitionUsageDescription": "We use speech recognition to instantly categorize your spoken expenses.",
-        "NSMicrophoneUsageDescription": "We need microphone access to record your voice notes."
+        "NSSpeechRecognitionUsageDescription": "Allow ExpenseTracker to securely recognize your spoken expenses.",
+        "NSMicrophoneUsageDescription": "Allow ExpenseTracker to access the microphone for voice expenses."
       }
     },
     "android": {
@@ -35,7 +35,9 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.aneesaboobacker.frontend",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -50,6 +52,11 @@
           "speechRecognitionPermission": "Allow ExpenseTracker to securely recognize your spoken expenses."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0a0d2d25-5d52-411b-beeb-c96fb0180c35"
+      }
+    }
   }
 }
