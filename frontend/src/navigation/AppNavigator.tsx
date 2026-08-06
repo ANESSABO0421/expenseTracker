@@ -19,6 +19,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
 import TransactionDetailsScreen from '../screens/TransactionDetailsScreen';
+import ChatAssistantScreen from '../screens/ChatAssistantScreen';
 import { useStore } from '../store/useStore';
 
 const Stack = createNativeStackNavigator();
@@ -223,6 +224,11 @@ export default function AppNavigator() {
             <Stack.Screen
               name="TransactionDetails"
               component={TransactionDetailsScreen}
+              options={{ presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="ChatAssistant"
+              component={ChatAssistantScreen}
               options={{ presentation: 'modal' }}
             />
           </>

@@ -7,6 +7,7 @@ const authRoutes = require('./routes/authRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const insightRoutes = require('./routes/insightRoutes');
 const scanReceiptRoute = require('./routes/scanReceiptRoute');
+const chatRoute = require('./routes/chatRoute');
 const { errorHandler } = require('./middleware/errorMiddleware');
 
 // Load env vars
@@ -34,6 +35,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/insights', insightRoutes);
 app.use('/api/scan-receipt', scanReceiptRoute);
+app.use('/api/chat', chatRoute);
 
 // Error Middleware
 app.use(errorHandler);

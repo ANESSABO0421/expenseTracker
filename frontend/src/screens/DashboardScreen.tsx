@@ -6,7 +6,7 @@ import {
 import Animated, { useSharedValue, withRepeat, withSequence, withTiming, useAnimatedStyle, Easing } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LineChart, BarChart } from 'react-native-gifted-charts';
+import { LineChart, BarChart, PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'nativewind';
 import { useStore, Transaction } from '../store/useStore';
@@ -17,7 +17,7 @@ const { width } = Dimensions.get('window');
 
 export default function DashboardScreen({ navigation }: any) {
   const { user, transactions, fetchTransactions, isLoading, currency, exchangeRates, enableConversion } = useStore();
-  const [chartType, setChartType] = useState<'line' | 'bar'>('line');
+  const [chartType, setChartType] = useState<'line' | 'bar' | 'donut'>('line');
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -72,15 +72,60 @@ export default function DashboardScreen({ navigation }: any) {
     return { totalIncome: income, totalExpense: expense, balance: income - expense };
   }, [transactions]);
 
-  const { expenses, lineData, barData } = useMemo(() => {
-    const exps = transactions.filter(t => t.type === 'expense').slice(0, 8).reverse();
-    const lData = exps.length > 0
-      ? exps.map(t => ({ value: t.amount, label: t.category.substring(0, 3) }))
-      : [{ value: 0, label: 'N/A' }];
-    const bData = exps.length > 0
-      ? exps.map(t => ({ value: t.amount, label: t.category.substring(0, 3), frontColor: '#007AFF' }))
-      : [{ value: 0, label: 'N/A', frontColor: '#007AFF' }];
-    return { expenses: exps, lineData: lData, barData: bData };
+  const CATEGORY_PALETTE = ['#007AFF', '#FF9500', '#34C759', '#AF52DE', '#FF3B30', '#5AC8FA', '#FFCC00', '#FF2D55'];
+
+  const { lineData, lineData2, barData, pieData, hasPieData } = useMemo(() => {
+    // Bucket the last 7 days so income vs expense reads as a real trend line,
+    // instead of one bar per category (which produced unreadable "Tra"/"Foo" labels).
+    const DAYS = 7;
+    const today = new Date();
+    const buckets = Array.from({ length: DAYS }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (DAYS - 1 - i));
+      return {
+        key: d.toISOString().slice(0, 10),
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        income: 0,
+        expense: 0,
+      };
+    });
+    const bucketByKey = new Map(buckets.map(b => [b.key, b]));
+
+    transactions.forEach(t => {
+      const key = new Date(t.date).toISOString().slice(0, 10);
+      const bucket = bucketByKey.get(key);
+      if (!bucket) return; // outside the visible window
+      if (t.type === 'income') bucket.income += t.amount;
+      else bucket.expense += t.amount;
+    });
+
+    const lData = buckets.map(b => ({ value: b.income, label: b.label }));
+    const lData2 = buckets.map(b => ({ value: b.expense, label: b.label }));
+
+    // Grouped bars: income then expense per day, tight spacing within a day,
+    // wider spacing between days.
+    const bData: any[] = [];
+    buckets.forEach(b => {
+      bData.push({ value: b.income, label: b.label, frontColor: '#34C759', spacing: 2 });
+      bData.push({ value: b.expense, frontColor: '#FF3B30', spacing: 20 });
+    });
+
+    // Category breakdown (top 6 expense categories) for the donut view.
+    const catTotals = new Map<string, number>();
+    transactions
+      .filter(t => t.type === 'expense')
+      .forEach(t => catTotals.set(t.category, (catTotals.get(t.category) || 0) + t.amount));
+
+    const pData = Array.from(catTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([category, value], i) => ({
+        value,
+        color: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length],
+        text: category,
+      }));
+
+    return { lineData: lData, lineData2: lData2, barData: bData, pieData: pData, hasPieData: pData.length > 0 };
   }, [transactions]);
 
   const renderTransaction = useCallback((t: Transaction, index: number) => {
@@ -127,6 +172,12 @@ export default function DashboardScreen({ navigation }: any) {
             </Text>
           </View>
           <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ChatAssistant')}
+              style={[styles.iconBtn, { backgroundColor: cardBg }]}
+            >
+              <Ionicons name="sparkles" size={18} color="#5856D6" />
+            </TouchableOpacity>
             <TouchableOpacity onPress={handleToggleTheme} style={[styles.iconBtn, { backgroundColor: cardBg }]}>
               <Ionicons name={isDark ? 'sunny' : 'moon'} size={18} color={isDark ? '#FFD60A' : '#5E5CE6'} />
             </TouchableOpacity>
@@ -202,20 +253,46 @@ export default function DashboardScreen({ navigation }: any) {
                 >
                   <Text style={[styles.segmentText, { color: chartType === 'bar' ? textPrimary : textSecondary }]}>Bar</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setChartType('donut')}
+                  style={[styles.segment, chartType === 'donut' && { backgroundColor: isDark ? '#3A3A3C' : '#FFFFFF' }]}
+                >
+                  <Text style={[styles.segmentText, { color: chartType === 'donut' ? textPrimary : textSecondary }]}>Donut</Text>
+                </TouchableOpacity>
               </View>
             </View>
+
+            {chartType !== 'donut' && (
+              <View style={styles.legendRow}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#34C759' }]} />
+                  <Text style={[styles.legendText, { color: textSecondary }]}>Income</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#FF3B30' }]} />
+                  <Text style={[styles.legendText, { color: textSecondary }]}>Expense</Text>
+                </View>
+              </View>
+            )}
+
             <View style={styles.chartContainer}>
               {chartType === 'line' ? (
                 <LineChart
                   data={lineData}
+                  data2={lineData2}
                   width={width - 80}
                   height={160}
                   thickness={3}
-                  color="#007AFF"
-                  startFillColor="#007AFF"
+                  color="#34C759"
+                  color2="#FF3B30"
+                  startFillColor="#34C759"
+                  startFillColor2="#FF3B30"
                   endFillColor="transparent"
+                  endFillColor2="transparent"
                   startOpacity={0.15}
+                  startOpacity2={0.15}
                   endOpacity={0}
+                  endOpacity2={0}
                   initialSpacing={10}
                   noOfSections={4}
                   yAxisTextStyle={{ color: textSecondary, fontSize: 11 }}
@@ -223,21 +300,21 @@ export default function DashboardScreen({ navigation }: any) {
                   yAxisColor="transparent"
                   xAxisColor={separator}
                   hideDataPoints={false}
-                  dataPointsColor="#007AFF"
+                  dataPointsColor="#34C759"
+                  dataPointsColor2="#FF3B30"
                   dataPointsRadius={4}
                   areaChart
                   isAnimated
                   animationDuration={800}
                 />
-              ) : (
+              ) : chartType === 'bar' ? (
                 <BarChart
                   data={barData}
                   width={width - 80}
                   height={160}
-                  barWidth={24}
-                  spacing={18}
+                  barWidth={16}
                   noOfSections={4}
-                  barBorderRadius={6}
+                  barBorderRadius={4}
                   yAxisTextStyle={{ color: textSecondary, fontSize: 11 }}
                   xAxisLabelTextStyle={{ color: textSecondary, fontSize: 10 }}
                   yAxisColor="transparent"
@@ -245,6 +322,41 @@ export default function DashboardScreen({ navigation }: any) {
                   isAnimated
                   animationDuration={800}
                 />
+              ) : hasPieData ? (
+                <View style={styles.donutWrap}>
+                  <PieChart
+                    data={pieData}
+                    donut
+                    radius={80}
+                    innerRadius={52}
+                    innerCircleColor={cardBg}
+                    centerLabelComponent={() => (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: textSecondary }}>Spent</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: textPrimary }}>
+                          {formatCurrency(totalExpense, currency, enableConversion ? exchangeRates : null)}
+                        </Text>
+                      </View>
+                    )}
+                  />
+                  <View style={styles.donutLegend}>
+                    {pieData.map((slice, i) => (
+                      <View key={i} style={styles.donutLegendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                        <Text style={[styles.donutLegendText, { color: textPrimary }]} numberOfLines={1}>
+                          {slice.text}
+                        </Text>
+                        <Text style={[styles.donutLegendValue, { color: textSecondary }]}>
+                          {formatCurrency(slice.value, currency, enableConversion ? exchangeRates : null)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <Text style={{ color: textSecondary, textAlign: 'center', paddingVertical: 40 }}>
+                  No expense data yet.
+                </Text>
               )}
             </View>
           </View>
@@ -337,6 +449,15 @@ const styles = StyleSheet.create({
   segment: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 6 },
   segmentText: { fontSize: 13, fontWeight: '600' },
   chartContainer: { paddingHorizontal: 12, paddingBottom: 16 },
+  legendRow: { flexDirection: 'row', gap: 16, paddingHorizontal: 20, marginBottom: 4 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 12, fontWeight: '500' },
+  donutWrap: { alignItems: 'center', paddingVertical: 8 },
+  donutLegend: { width: '100%', marginTop: 20, gap: 10, paddingHorizontal: 8 },
+  donutLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  donutLegendText: { flex: 1, fontSize: 14, fontWeight: '500' },
+  donutLegendValue: { fontSize: 13, fontWeight: '600' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
   sectionTitle: { fontSize: 22, fontWeight: '700' },
   seeAll: { fontSize: 15, color: '#007AFF', fontWeight: '500' },

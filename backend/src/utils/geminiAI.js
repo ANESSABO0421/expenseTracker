@@ -99,6 +99,7 @@ const generateInsights = async (transactions) => {
 module.exports = {
   generateInsights,
   scanReceiptWithAI,
+  chatWithAI,
 };
 
 // ─── Receipt Scanner ─────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ Respond ONLY with valid JSON, no explanation.`;
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-flash-latest',
       contents: [
         {
           role: 'user',
@@ -158,5 +159,49 @@ Respond ONLY with valid JSON, no explanation.`;
     console.error('Receipt AI scan error:', error);
     // Return safe fallback — frontend will show an error toast
     throw new Error('Could not extract receipt details. Please enter them manually.');
+  }
+}
+
+// ─── Finance Chatbot ─────────────────────────────────────────────────────────
+// `history` is an array of prior turns: [{ role: 'user'|'model', text: string }, ...]
+// `transactions` is the user's transaction list, used as grounding context so the
+// assistant can answer questions about their actual spending.
+async function chatWithAI(question, transactions, history = []) {
+  try {
+    const recentTransactions = (transactions || []).slice(0, 200).map(t => ({
+      amount: t.amount,
+      type: t.type,
+      category: t.category,
+      description: t.description,
+      date: t.date,
+    }));
+
+    const systemContext = `You are Spendova's built-in AI finance assistant, a friendly and concise personal finance helper inside an expense tracker app.
+You can see the user's transaction history below (JSON). Use it to answer questions accurately — do the math yourself (sums, averages, comparisons, trends) rather than guessing.
+If the answer requires data that isn't in the transaction history, say so honestly instead of making it up.
+Keep answers short and conversational (2-5 sentences unless the user asks for a detailed breakdown). Use the user's currency-less numeric amounts as-is (don't invent a currency symbol).
+
+User's transaction history (JSON, most recent first):
+${JSON.stringify(recentTransactions)}`;
+
+    const contents = [
+      { role: 'user', parts: [{ text: systemContext }] },
+      { role: 'model', parts: [{ text: "Got it — I've reviewed the transaction history and I'm ready to help. What would you like to know?" }] },
+      ...history.map(turn => ({
+        role: turn.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: turn.text }],
+      })),
+      { role: 'user', parts: [{ text: question }] },
+    ];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-flash-latest',
+      contents,
+    });
+
+    return response.text?.trim() || "Sorry, I couldn't come up with an answer for that. Try rephrasing?";
+  } catch (error) {
+    console.error('Chatbot AI error:', error);
+    throw new Error('The assistant is temporarily unavailable. Please try again in a moment.');
   }
 }

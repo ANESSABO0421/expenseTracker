@@ -12,9 +12,12 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 interface PreloaderProps {
   onFinish: () => void;
+  // True once the app has actually finished loading (session restore, etc).
+  // The preloader fades out when this flips true instead of on a guessed timer.
+  ready: boolean;
 }
 
-export default function Preloader({ onFinish }: PreloaderProps) {
+export default function Preloader({ onFinish, ready }: PreloaderProps) {
   const { theme } = useStore();
   const isDark = theme === 'dark';
 
@@ -128,18 +131,24 @@ export default function Preloader({ onFinish }: PreloaderProps) {
       })
     ).start();
 
-    // ── Fade out & finish ──
-    const timeout = setTimeout(() => {
-      Animated.timing(containerOpacity, {
-        toValue: 0,
-        duration: 700,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }).start(() => onFinish());
-    }, 3600);
-
-    return () => clearTimeout(timeout);
+    // ── Safety net: never hang forever even if `ready` somehow never arrives ──
+    const failsafe = setTimeout(() => fadeOut(), 8000);
+    return () => clearTimeout(failsafe);
   }, []);
+
+  const fadeOut = () => {
+    Animated.timing(containerOpacity, {
+      toValue: 0,
+      duration: 700,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
+    }).start(() => onFinish());
+  };
+
+  // ── Fade out once the app is actually ready (not on a guessed timer) ──
+  useEffect(() => {
+    if (ready) fadeOut();
+  }, [ready]);
 
   const spinOuter = outerRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const spinInner = innerRotate.interpolate({ inputRange: [-1, 0], outputRange: ['-360deg', '0deg'] });
