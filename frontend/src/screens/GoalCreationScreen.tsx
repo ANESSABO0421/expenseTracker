@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet, Image
+  KeyboardAvoidingView, Platform, ActivityIndicator, Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,13 +59,6 @@ export default function GoalCreationScreen({ navigation }: any) {
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  const bg = isDark ? '#0C0E14' : '#F6F1E7';
-  const cardBg = isDark ? '#161923' : '#FFFFFF';
-  const surface2 = isDark ? '#1B2032' : '#FBF7EE';
-  const textPrimary = isDark ? '#EDEAE1' : '#211C13';
-  const textSecondary = isDark ? '#9A98A6' : '#726A57';
-  const separator = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(30,24,12,0.1)';
-
   const deadlineDate = (): string | null => {
     if (!deadlineMonths) return null;
     const d = new Date();
@@ -74,11 +67,10 @@ export default function GoalCreationScreen({ navigation }: any) {
   };
 
   const avgMonthlySaving = (() => {
-    // Rough estimate from the user's own history: trailing income - expense, monthly.
     if (!transactions?.length) return 0;
     const income = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const months = Math.max(1, transactions.length / 15); // rough spread estimate
+    const months = Math.max(1, transactions.length / 15);
     return Math.max(0, Math.round((income - expense) / months));
   })();
 
@@ -175,211 +167,366 @@ export default function GoalCreationScreen({ navigation }: any) {
     }
   };
 
+  // Separator color for step dots (needs to be inline since it's a computed rgba)
+  const separatorColor = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(30,24,12,0.1)';
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={[styles.headerBtn, { backgroundColor: cardBg }]}>
-            <Ionicons name={step === 1 ? 'close' : 'chevron-back'} size={20} color={textPrimary} />
+    <SafeAreaView
+      className={`flex-1 ${isDark ? 'bg-bgDark' : 'bg-bgLight'}`}
+      edges={['top', 'bottom']}
+    >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+
+        {/* Header */}
+        <View className="flex-row items-center justify-between px-5 pt-2 pb-1">
+          <TouchableOpacity
+            onPress={goBack}
+            className={`w-9 h-9 rounded-full items-center justify-center ${isDark ? 'bg-cardDark' : 'bg-cardLight'}`}
+          >
+            <Ionicons
+              name={step === 1 ? 'close' : 'chevron-back'}
+              size={20}
+              color={isDark ? '#EDEAE1' : '#211C13'}
+            />
           </TouchableOpacity>
-          <View style={styles.dotsRow}>
+
+          {/* Step dots */}
+          <View className="flex-row items-center gap-[5px]">
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <View
                 key={i}
-                style={[
-                  styles.stepDot,
-                  { backgroundColor: i < step ? GOLD : separator, width: i === step - 1 ? 20 : 6 },
-                ]}
+                style={{
+                  height: 6,
+                  width: i === step - 1 ? 20 : 6,
+                  borderRadius: 3,
+                  backgroundColor: i < step ? GOLD : separatorColor,
+                }}
               />
             ))}
           </View>
-          <View style={{ width: 36 }} />
+
+          <View className="w-9" />
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+        >
 
-          {/* STEP 1 — category */}
+          {/* ── STEP 1 — category ── */}
           {step === 1 && (
             <View>
-              <Text style={[styles.eyebrow, { color: GOLD }]}>Step 1 of {TOTAL_STEPS}</Text>
-              <Text style={[styles.stepTitle, { color: textPrimary }]}>What are you{'\n'}saving for?</Text>
-              <View style={{ marginTop: 24, gap: 10 }}>
+              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
+                Step 1 of {TOTAL_STEPS}
+              </Text>
+              <Text
+                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
+              >
+                What are you{'\n'}saving for?
+              </Text>
+
+              <View className="mt-6 gap-[10px]">
                 {CATEGORY_OPTIONS.map(opt => (
                   <TouchableOpacity
                     key={opt.key}
                     onPress={() => selectCategory(opt)}
-                    style={[styles.categoryCard, { backgroundColor: cardBg, borderColor: separator }]}
                     activeOpacity={0.8}
+                    className={`flex-row items-center gap-[14px] p-4 rounded-2xl border ${
+                      isDark
+                        ? 'bg-cardDark border-white/[0.09]'
+                        : 'bg-cardLight border-black/[0.1]'
+                    }`}
                   >
-                    <Text style={{ fontSize: 24 }}>{opt.emoji}</Text>
-                    <Text style={[styles.categoryLabel, { color: textPrimary }]}>{opt.label}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={textSecondary} />
+                    <Text className="text-2xl">{opt.emoji}</Text>
+                    <Text
+                      className={`flex-1 text-base font-semibold ${isDark ? 'text-textDark' : 'text-textLight'}`}
+                    >
+                      {opt.label}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={isDark ? '#9A98A6' : '#726A57'} />
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
           )}
 
-          {/* STEP 2 — name + image */}
+          {/* ── STEP 2 — name + image ── */}
           {step === 2 && (
             <View>
-              <Text style={[styles.eyebrow, { color: GOLD }]}>Step 2 of {TOTAL_STEPS}</Text>
-              <Text style={[styles.stepTitle, { color: textPrimary }]}>Make it real</Text>
-              <Text style={[styles.stepSub, { color: textSecondary }]}>Give it a name, and a picture to look at every day.</Text>
+              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
+                Step 2 of {TOTAL_STEPS}
+              </Text>
+              <Text
+                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
+              >
+                Make it real
+              </Text>
+              <Text className={`text-sm mt-2 leading-5 ${isDark ? 'text-subDark' : 'text-subLight'}`}>
+                Give it a name, and a picture to look at every day.
+              </Text>
 
               <TextInput
                 value={title}
                 onChangeText={setTitle}
-                placeholder="e.g. MacBook Pro 14&quot;"
-                placeholderTextColor={textSecondary}
-                style={[styles.textInput, { backgroundColor: cardBg, color: textPrimary, borderColor: separator }]}
+                placeholder='e.g. MacBook Pro 14"'
+                placeholderTextColor={isDark ? '#9A98A6' : '#726A57'}
+                className={`mt-5 border rounded-[14px] px-4 py-[14px] text-base font-semibold ${
+                  isDark
+                    ? 'bg-cardDark text-textDark border-white/[0.09]'
+                    : 'bg-cardLight text-textLight border-black/[0.1]'
+                }`}
               />
 
               <TouchableOpacity
                 onPress={() => pickImage(false)}
                 disabled={isUploadingImage}
-                style={[styles.imagePicker, { backgroundColor: cardBg, borderColor: separator }]}
                 activeOpacity={0.85}
+                className={`mt-4 h-40 rounded-[18px] border overflow-hidden ${
+                  isDark
+                    ? 'bg-cardDark border-white/[0.09]'
+                    : 'bg-cardLight border-black/[0.1]'
+                }`}
               >
                 {imageUri ? (
-                  <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+                  <Image source={{ uri: imageUri }} className="w-full h-full" />
                 ) : (
-                  <LinearGradient colors={[surface2, cardBg]} style={styles.imagePlaceholder}>
-                    <Text style={{ fontSize: 34 }}>{category?.emoji || '🎯'}</Text>
+                  <LinearGradient
+                    colors={isDark ? ['#1B2032', '#161923'] : ['#FBF7EE', '#FFFFFF']}
+                    className="w-full h-full items-center justify-center"
+                  >
+                    <Text className="text-[34px]">{category?.emoji || '🎯'}</Text>
                   </LinearGradient>
                 )}
-                <View style={styles.imagePickerOverlay}>
+                <View className="absolute bottom-0 left-0 right-0 flex-row gap-1.5 items-center justify-center py-2.5 bg-black/[0.45]">
                   {isUploadingImage ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
                     <>
                       <Ionicons name="camera" size={16} color="#FFF" />
-                      <Text style={styles.imagePickerText}>{imageUri ? 'Change photo' : 'Add a photo'}</Text>
+                      <Text className="text-white text-[13px] font-bold">
+                        {imageUri ? 'Change photo' : 'Add a photo'}
+                      </Text>
                     </>
                   )}
                 </View>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => pickImage(true)} style={{ alignSelf: 'center', marginTop: 10 }}>
-                <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>or take a photo</Text>
+
+              <TouchableOpacity onPress={() => pickImage(true)} className="self-center mt-2.5">
+                <Text className={`text-[13px] font-semibold ${isDark ? 'text-subDark' : 'text-subLight'}`}>
+                  or take a photo
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => title.trim() ? goNext() : Toast.show({ type: 'error', text1: 'Name your goal' })}
-                style={styles.primaryBtnWrap}
+                className="mt-[26px]"
               >
-                <LinearGradient colors={[GOLD, EMERALD]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtn}>
-                  <Text style={styles.primaryBtnText}>Continue</Text>
+                <LinearGradient
+                  colors={[GOLD, EMERALD]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  className="rounded-2xl py-[17px] items-center justify-center"
+                >
+                  <Text className="text-white text-base font-bold">Continue</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* STEP 3 — target amount */}
+          {/* ── STEP 3 — target amount ── */}
           {step === 3 && (
             <View>
-              <Text style={[styles.eyebrow, { color: GOLD }]}>Step 3 of {TOTAL_STEPS}</Text>
-              <Text style={[styles.stepTitle, { color: textPrimary }]}>How much do{'\n'}you need?</Text>
-              <View style={[styles.amountCard, { backgroundColor: cardBg, borderColor: separator }]}>
-                <Text style={{ fontSize: 32, fontWeight: '700', color: GOLD }}>
+              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
+                Step 3 of {TOTAL_STEPS}
+              </Text>
+              <Text
+                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
+              >
+                How much do{'\n'}you need?
+              </Text>
+
+              <View
+                className={`mt-5 border rounded-[18px] p-6 flex-row items-center justify-center gap-1.5 ${
+                  isDark
+                    ? 'bg-cardDark border-white/[0.09]'
+                    : 'bg-cardLight border-black/[0.1]'
+                }`}
+              >
+                <Text className="text-[32px] font-bold" style={{ color: GOLD }}>
                   {CURRENCY_SYMBOLS[currency] || currency}
                 </Text>
                 <TextInput
                   value={targetAmount}
                   onChangeText={setTargetAmount}
                   placeholder="0"
-                  placeholderTextColor={textSecondary}
+                  placeholderTextColor={isDark ? '#9A98A6' : '#726A57'}
                   keyboardType="decimal-pad"
-                  style={[styles.amountInput, { color: textPrimary }]}
                   autoFocus
+                  className={`text-[40px] font-bold min-w-[100px] ${isDark ? 'text-textDark' : 'text-textLight'}`}
                 />
               </View>
+
               {avgMonthlySaving > 0 && (
-                <Text style={[styles.hint, { color: textSecondary }]}>
+                <Text className={`text-[12.5px] mt-2.5 ${isDark ? 'text-subDark' : 'text-subLight'}`}>
                   ≈ {formatCurrency(avgMonthlySaving, currency, enableConversion ? exchangeRates : null)}/mo is your average recent saving rate.
                 </Text>
               )}
-              <TouchableOpacity onPress={handleAmountNext} style={styles.primaryBtnWrap}>
-                <LinearGradient colors={[GOLD, EMERALD]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtn}>
-                  <Text style={styles.primaryBtnText}>Continue</Text>
+
+              <TouchableOpacity onPress={handleAmountNext} className="mt-[26px]">
+                <LinearGradient
+                  colors={[GOLD, EMERALD]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  className="rounded-2xl py-[17px] items-center justify-center"
+                >
+                  <Text className="text-white text-base font-bold">Continue</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* STEP 4 — deadline */}
+          {/* ── STEP 4 — deadline ── */}
           {step === 4 && (
             <View>
-              <Text style={[styles.eyebrow, { color: GOLD }]}>Step 4 of {TOTAL_STEPS}</Text>
-              <Text style={[styles.stepTitle, { color: textPrimary }]}>By when?</Text>
-              <View style={{ marginTop: 20, gap: 10 }}>
-                {DEADLINE_PRESETS.map(p => (
-                  <TouchableOpacity
-                    key={p.label}
-                    onPress={() => setDeadlineMonths(p.months)}
-                    style={[
-                      styles.deadlineOption,
-                      {
-                        backgroundColor: deadlineMonths === p.months ? 'rgba(212,178,106,0.12)' : cardBg,
-                        borderColor: deadlineMonths === p.months ? GOLD : separator,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.categoryLabel, { color: textPrimary }]}>{p.label}</Text>
-                    {deadlineMonths === p.months && <Ionicons name="checkmark-circle" size={20} color={GOLD} />}
-                  </TouchableOpacity>
-                ))}
+              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
+                Step 4 of {TOTAL_STEPS}
+              </Text>
+              <Text
+                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
+              >
+                By when?
+              </Text>
+
+              <View className="mt-5 gap-[10px]">
+                {DEADLINE_PRESETS.map(p => {
+                  const isSelected = deadlineMonths === p.months;
+                  return (
+                    <TouchableOpacity
+                      key={p.label}
+                      onPress={() => setDeadlineMonths(p.months)}
+                      className={`flex-row items-center p-4 rounded-[14px] border ${
+                        isSelected
+                          ? 'border-gold'
+                          : isDark
+                            ? 'bg-cardDark border-white/[0.09]'
+                            : 'bg-cardLight border-black/[0.1]'
+                      }`}
+                      style={isSelected ? { backgroundColor: 'rgba(212,178,106,0.12)', borderColor: GOLD } : undefined}
+                    >
+                      <Text
+                        className={`flex-1 text-base font-semibold ${isDark ? 'text-textDark' : 'text-textLight'}`}
+                      >
+                        {p.label}
+                      </Text>
+                      {isSelected && <Ionicons name="checkmark-circle" size={20} color={GOLD} />}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              <TouchableOpacity onPress={handleDeadlineNext} style={styles.primaryBtnWrap}>
-                <LinearGradient colors={[GOLD, EMERALD]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtn}>
-                  <Text style={styles.primaryBtnText}>Generate my plan</Text>
+
+              <TouchableOpacity onPress={handleDeadlineNext} className="mt-[26px]">
+                <LinearGradient
+                  colors={[GOLD, EMERALD]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  className="rounded-2xl py-[17px] items-center justify-center"
+                >
+                  <Text className="text-white text-base font-bold">Generate my plan</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* STEP 5 — AI plan */}
+          {/* ── STEP 5 — AI plan ── */}
           {step === 5 && (
             <View>
-              <Text style={[styles.eyebrow, { color: GOLD }]}>Step 5 of {TOTAL_STEPS}</Text>
-              <Text style={[styles.stepTitle, { color: textPrimary }]}>Your plan</Text>
+              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
+                Step 5 of {TOTAL_STEPS}
+              </Text>
+              <Text
+                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
+              >
+                Your plan
+              </Text>
 
               {isGeneratingPlan || !plan ? (
-                <View style={{ paddingVertical: 60, alignItems: 'center' }}>
+                <View className="py-[60px] items-center">
                   <ActivityIndicator size="large" color={GOLD} />
-                  <Text style={{ color: textSecondary, marginTop: 12, fontSize: 13 }}>Thinking this through...</Text>
+                  <Text className={`mt-3 text-[13px] ${isDark ? 'text-subDark' : 'text-subLight'}`}>
+                    Thinking this through...
+                  </Text>
                 </View>
               ) : (
                 <>
-                  <View style={[styles.planQuoteCard, { backgroundColor: cardBg, borderColor: separator }]}>
-                    <Text style={[styles.planQuote, { color: GOLD }]}>"{plan.motivationalLine}"</Text>
+                  {/* Motivational quote */}
+                  <View
+                    className={`mt-5 border rounded-[18px] p-5 ${
+                      isDark
+                        ? 'bg-cardDark border-white/[0.09]'
+                        : 'bg-cardLight border-black/[0.1]'
+                    }`}
+                  >
+                    <Text
+                      className="text-[17px] italic font-semibold leading-6 text-center"
+                      style={{ color: GOLD }}
+                    >
+                      "{plan.motivationalLine}"
+                    </Text>
                   </View>
-                  <View style={styles.planStatsRow}>
-                    <View style={[styles.planStat, { backgroundColor: cardBg, borderColor: separator }]}>
-                      <Text style={[styles.planStatValue, { color: textPrimary }]}>
-                        {formatCurrency(plan.requiredMonthly, currency, enableConversion ? exchangeRates : null)}
-                      </Text>
-                      <Text style={[styles.planStatLabel, { color: textSecondary }]}>Monthly</Text>
-                    </View>
-                    <View style={[styles.planStat, { backgroundColor: cardBg, borderColor: separator }]}>
-                      <Text style={[styles.planStatValue, { color: textPrimary }]}>
-                        {formatCurrency(plan.requiredWeekly, currency, enableConversion ? exchangeRates : null)}
-                      </Text>
-                      <Text style={[styles.planStatLabel, { color: textSecondary }]}>Weekly</Text>
-                    </View>
-                    <View style={[styles.planStat, { backgroundColor: cardBg, borderColor: separator }]}>
-                      <Text style={[styles.planStatValue, { color: textPrimary }]}>
-                        {formatCurrency(plan.requiredDaily, currency, enableConversion ? exchangeRates : null)}
-                      </Text>
-                      <Text style={[styles.planStatLabel, { color: textSecondary }]}>Daily</Text>
-                    </View>
+
+                  {/* Stats row */}
+                  <View className="flex-row gap-2.5 mt-4">
+                    {[
+                      { value: plan.requiredMonthly, label: 'Monthly' },
+                      { value: plan.requiredWeekly, label: 'Weekly' },
+                      { value: plan.requiredDaily, label: 'Daily' },
+                    ].map(({ value, label }) => (
+                      <View
+                        key={label}
+                        className={`flex-1 border rounded-[14px] py-4 items-center ${
+                          isDark
+                            ? 'bg-cardDark border-white/[0.09]'
+                            : 'bg-cardLight border-black/[0.1]'
+                        }`}
+                      >
+                        <Text
+                          className={`text-[15px] font-extrabold ${isDark ? 'text-textDark' : 'text-textLight'}`}
+                        >
+                          {formatCurrency(value, currency, enableConversion ? exchangeRates : null)}
+                        </Text>
+                        <Text
+                          className={`text-[10.5px] font-bold uppercase tracking-[0.5px] mt-1 ${isDark ? 'text-subDark' : 'text-subLight'}`}
+                        >
+                          {label}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
-                  <Text style={[styles.hint, { color: textSecondary, textAlign: 'center' }]}>
-                    Projected completion: {new Date(plan.projectedCompletionDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+
+                  <Text
+                    className={`text-[12.5px] mt-2.5 text-center ${isDark ? 'text-subDark' : 'text-subLight'}`}
+                  >
+                    Projected completion:{' '}
+                    {new Date(plan.projectedCompletionDate).toLocaleDateString('en-US', {
+                      month: 'long', day: 'numeric', year: 'numeric',
+                    })}
                   </Text>
 
-                  <TouchableOpacity onPress={handleCommit} disabled={isCreating} style={styles.primaryBtnWrap}>
-                    <LinearGradient colors={[GOLD, EMERALD]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtn}>
-                      {isCreating ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>I'm in</Text>}
+                  <TouchableOpacity
+                    onPress={handleCommit}
+                    disabled={isCreating}
+                    className="mt-[26px]"
+                  >
+                    <LinearGradient
+                      colors={[GOLD, EMERALD]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      className="rounded-2xl py-[17px] items-center justify-center"
+                    >
+                      {isCreating
+                        ? <ActivityIndicator color="#FFF" />
+                        : <Text className="text-white text-base font-bold">I'm in</Text>
+                      }
                     </LinearGradient>
                   </TouchableOpacity>
                 </>
@@ -392,42 +539,3 @@ export default function GoalCreationScreen({ navigation }: any) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
-  headerBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  dotsRow: { flexDirection: 'row', gap: 5, alignItems: 'center' },
-  stepDot: { height: 6, borderRadius: 3 },
-  eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 },
-  stepTitle: { fontSize: 30, fontWeight: '700', letterSpacing: -0.5, lineHeight: 36 },
-  stepSub: { fontSize: 14, marginTop: 8, lineHeight: 20 },
-
-  categoryCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 16, borderWidth: 1 },
-  categoryLabel: { flex: 1, fontSize: 16, fontWeight: '600' },
-
-  textInput: { marginTop: 20, borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontWeight: '600' },
-
-  imagePicker: { marginTop: 16, height: 160, borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
-  imagePreview: { width: '100%', height: '100%' },
-  imagePlaceholder: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
-  imagePickerOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: 'rgba(0,0,0,0.45)' },
-  imagePickerText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
-
-  amountCard: { marginTop: 20, borderWidth: 1, borderRadius: 18, padding: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  amountInput: { fontSize: 40, fontWeight: '700', minWidth: 100 },
-  hint: { fontSize: 12.5, marginTop: 10 },
-
-  deadlineOption: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 14, borderWidth: 1 },
-
-  planQuoteCard: { marginTop: 20, borderWidth: 1, borderRadius: 18, padding: 20 },
-  planQuote: { fontSize: 17, fontStyle: 'italic', fontWeight: '600', lineHeight: 24, textAlign: 'center' },
-  planStatsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  planStat: { flex: 1, borderWidth: 1, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  planStatValue: { fontSize: 15, fontWeight: '800' },
-  planStatLabel: { fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4 },
-
-  primaryBtnWrap: { marginTop: 26 },
-  primaryBtn: { borderRadius: 16, paddingVertical: 17, alignItems: 'center', justifyContent: 'center' },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-});

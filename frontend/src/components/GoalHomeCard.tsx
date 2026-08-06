@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { useColorScheme } from 'nativewind';
@@ -31,59 +31,103 @@ export default function GoalHomeCard({ goal, onPress }: { goal: Goal; onPress: (
     }
   }, [goal._id]);
 
-  const cardBg = isDark ? '#161923' : '#FFFFFF';
-  const textPrimary = isDark ? '#EDEAE1' : '#211C13';
-  const textSecondary = isDark ? '#9A98A6' : '#726A57';
+  // Computed rgba values that can't be expressed as Tailwind classes
+  const ringTrack = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.08)';
   const glassBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(20,16,8,0.035)';
   const glassBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.09)';
-  const ringTrack = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.08)';
 
   const remaining = Math.max(0, goal.targetAmount - goal.savedAmount);
   const left = daysLeft(goal.deadline);
   const dashOffset = RING_CIRCUMFERENCE * (1 - goal.percent / 100);
 
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.card, { backgroundColor: cardBg }]}>
-      <View style={styles.heroWrap}>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      className={`rounded-[22px] overflow-hidden shadow-lg ${isDark ? 'bg-cardDark' : 'bg-cardLight'}`}
+      style={{
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 4,
+      }}
+    >
+      {/* Hero image / gradient */}
+      <View className="h-[130px] justify-end relative">
         {goal.imageUrl ? (
-          <Image source={{ uri: goal.imageUrl }} style={styles.heroImage} />
+          <Image source={{ uri: goal.imageUrl }} className="absolute inset-0 w-full h-full" />
         ) : (
-          <LinearGradient colors={isDark ? ['#3a3226', '#181510'] : ['#EFE6D4', '#DDD0B4']} style={styles.heroImage}>
-            <Text style={{ fontSize: 30 }}>{goal.emoji}</Text>
+          <LinearGradient
+            colors={isDark ? ['#3a3226', '#181510'] : ['#EFE6D4', '#DDD0B4']}
+            className="absolute inset-0 w-full h-full items-center justify-center"
+          >
+            <Text className="text-[30px]">{goal.emoji}</Text>
           </LinearGradient>
         )}
-        <View style={styles.heroScrim} />
-        <Text style={styles.heroTitle}>{goal.title}</Text>
+        {/* Scrim */}
+        <View className="absolute inset-0 bg-black/[0.28]" />
+        {/* Title */}
+        <Text className="text-white text-xl font-extrabold p-4 pb-3">
+          {goal.title}
+        </Text>
       </View>
 
+      {/* AI Coach line */}
       {!!coachLine && (
-        <Text style={[styles.coachLine, { color: GOLD }]} numberOfLines={2}>"{coachLine}"</Text>
+        <Text
+          className="text-[13px] italic font-semibold px-4 pt-3 leading-[18px]"
+          style={{ color: GOLD }}
+          numberOfLines={2}
+        >
+          "{coachLine}"
+        </Text>
       )}
 
-      <View style={[styles.statPanel, { backgroundColor: glassBg, borderColor: glassBorder }]}>
-        <View style={styles.statRow}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.miniStat}>
-              <Text style={[styles.miniStatValue, { color: textPrimary }]}>
+      {/* Stats panel */}
+      <View
+        className="m-3.5 mt-3 rounded-2xl border p-3.5"
+        style={{ backgroundColor: glassBg, borderColor: glassBorder }}
+      >
+        <View className="flex-row items-center">
+          {/* Left stats */}
+          <View className="flex-1">
+            <View className="mb-2">
+              <Text className={`text-[15px] font-extrabold ${isDark ? 'text-textDark' : 'text-textLight'}`}>
                 {formatCurrency(goal.savedAmount, currency, enableConversion ? exchangeRates : null)}
               </Text>
-              <Text style={[styles.miniStatLabel, { color: textSecondary }]}>Saved</Text>
+              <Text
+                className={`text-[10.5px] font-semibold uppercase tracking-[0.4px] mt-[1px] ${isDark ? 'text-subDark' : 'text-subLight'}`}
+              >
+                Saved
+              </Text>
             </View>
-            <View style={styles.miniStat}>
-              <Text style={[styles.miniStatValue, { color: textPrimary }]}>
+            <View className="mb-2">
+              <Text className={`text-[15px] font-extrabold ${isDark ? 'text-textDark' : 'text-textLight'}`}>
                 {formatCurrency(remaining, currency, enableConversion ? exchangeRates : null)}
               </Text>
-              <Text style={[styles.miniStatLabel, { color: textSecondary }]}>Remaining</Text>
+              <Text
+                className={`text-[10.5px] font-semibold uppercase tracking-[0.4px] mt-[1px] ${isDark ? 'text-subDark' : 'text-subLight'}`}
+              >
+                Remaining
+              </Text>
             </View>
             {left !== null && (
-              <View style={styles.miniStat}>
-                <Text style={[styles.miniStatValue, { color: textPrimary }]}>{left}d</Text>
-                <Text style={[styles.miniStatLabel, { color: textSecondary }]}>Days left</Text>
+              <View className="mb-2">
+                <Text className={`text-[15px] font-extrabold ${isDark ? 'text-textDark' : 'text-textLight'}`}>
+                  {left}d
+                </Text>
+                <Text
+                  className={`text-[10.5px] font-semibold uppercase tracking-[0.4px] mt-[1px] ${isDark ? 'text-subDark' : 'text-subLight'}`}
+                >
+                  Days left
+                </Text>
               </View>
             )}
           </View>
 
-          <View style={styles.ringWrap}>
+          {/* Progress ring */}
+          <View className="w-[84px] h-[84px] items-center justify-center">
             <Svg width={84} height={84} viewBox="0 0 84 84">
               <Defs>
                 <SvgGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
@@ -101,37 +145,28 @@ export default function GoalHomeCard({ goal, onPress }: { goal: Goal; onPress: (
                 rotation="-90" origin="42,42"
               />
             </Svg>
-            <View style={styles.ringCenter}>
-              <Text style={[styles.ringPercent, { color: textPrimary }]}>{goal.percent}%</Text>
+            <View className="absolute items-center">
+              <Text className={`text-base font-extrabold ${isDark ? 'text-textDark' : 'text-textLight'}`}>
+                {goal.percent}%
+              </Text>
             </View>
           </View>
         </View>
 
+        {/* Streak pill */}
         {streak && streak.currentStreak >= 2 && (
-          <LinearGradient colors={['#E8786A', GOLD]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.streakPill}>
-            <Text style={styles.streakText}>🔥 {streak.currentStreak} day streak</Text>
+          <LinearGradient
+            colors={['#E8786A', GOLD]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            className="self-start mt-1.5 px-3 py-[5px] rounded-full"
+          >
+            <Text className="text-[#1a1408] text-[11.5px] font-extrabold">
+              🔥 {streak.currentStreak} day streak
+            </Text>
           </LinearGradient>
         )}
       </View>
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  card: { borderRadius: 22, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 4 },
-  heroWrap: { height: 130, justifyContent: 'flex-end', position: 'relative' },
-  heroImage: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  heroScrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.28)' },
-  heroTitle: { color: '#FFF', fontSize: 20, fontWeight: '800', padding: 16, paddingBottom: 12 },
-  coachLine: { fontSize: 13, fontStyle: 'italic', fontWeight: '600', paddingHorizontal: 16, paddingTop: 12, lineHeight: 18 },
-  statPanel: { margin: 14, marginTop: 12, borderRadius: 16, borderWidth: 1, padding: 14 },
-  statRow: { flexDirection: 'row', alignItems: 'center' },
-  miniStat: { marginBottom: 8 },
-  miniStatValue: { fontSize: 15, fontWeight: '800' },
-  miniStatLabel: { fontSize: 10.5, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 1 },
-  ringWrap: { width: 84, height: 84, alignItems: 'center', justifyContent: 'center' },
-  ringCenter: { position: 'absolute', alignItems: 'center' },
-  ringPercent: { fontSize: 16, fontWeight: '800' },
-  streakPill: { alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
-  streakText: { color: '#1a1408', fontSize: 11.5, fontWeight: '800' },
-});
