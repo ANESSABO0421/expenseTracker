@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, Image, ScrollView, TextInput,
-  ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet
+  ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +22,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export default function GoalDetailScreen({ route, navigation }: any) {
   const { goalId } = route.params;
-  const { goals, streak, currency, exchangeRates, enableConversion, contributeToGoal, fetchGoalTimeline, fetchCoachMessage } = useStore();
+  const { goals, streak, currency, exchangeRates, enableConversion, contributeToGoal, fetchGoalTimeline, fetchCoachMessage, deleteGoal } = useStore();
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -40,6 +40,25 @@ export default function GoalDetailScreen({ route, navigation }: any) {
   const ringTrack = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.08)';
   const glassBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(20,16,8,0.035)';
   const glassBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.09)';
+
+  const handleDeleteGoal = () => {
+    Alert.alert(
+      'Delete Goal',
+      `Are you sure you want to delete "${goal?.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await deleteGoal(goalId);
+            if (ok) navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
 
   const loadTimeline = useCallback(async () => {
     setIsLoadingTimeline(true);
@@ -110,7 +129,13 @@ export default function GoalDetailScreen({ route, navigation }: any) {
         >
           {goal.title}
         </Text>
-        <View className="w-9" />
+        {/* Delete button */}
+        <TouchableOpacity
+          onPress={handleDeleteGoal}
+          className={`w-9 h-9 rounded-full items-center justify-center ${isDark ? 'bg-cardDark' : 'bg-cardLight'}`}
+        >
+          <Ionicons name="trash-outline" size={18} color="#F43F5E" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>

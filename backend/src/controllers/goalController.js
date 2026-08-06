@@ -234,6 +234,24 @@ const getTimeline = async (req, res) => {
   }
 };
 
+// @desc    Delete a goal and its contribution history
+// @route   DELETE /api/goals/:id
+// @access  Public
+const deleteGoal = async (req, res) => {
+  try {
+    const goal = await Goal.findById(req.params.id);
+    if (!goal) return res.status(404).json({ success: false, message: 'Goal not found' });
+
+    // Remove all contributions tied to this goal first
+    await GoalContribution.deleteMany({ goal: goal._id });
+    await goal.deleteOne();
+
+    res.status(200).json({ success: true, message: 'Goal deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Called after an expense is saved — returns the day-delta impact line for the toast
 // @route   POST /api/goals/impact
 // @access  Public
@@ -271,6 +289,7 @@ module.exports = {
   getGoal,
   getGoalPlan,
   createGoal,
+  deleteGoal,
   contribute,
   simulate,
   getCoachMessage,

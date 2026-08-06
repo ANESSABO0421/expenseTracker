@@ -120,6 +120,7 @@ interface AppState {
   fetchGoals: (userId: string) => Promise<void>;
   getGoalPlan: (payload: { title: string; targetAmount: number; deadline?: string | null; avgMonthlySaving?: number }) => Promise<GoalPlan | null>;
   createGoal: (payload: Partial<Goal> & { user: string; title: string; targetAmount: number }) => Promise<Goal | null>;
+  deleteGoal: (goalId: string) => Promise<boolean>;
   contributeToGoal: (goalId: string, amount: number, opts?: { source?: string; note?: string; photoUrl?: string }) => Promise<{
     goal: Goal; milestonesCrossed: number[]; streak: SavingStreak | null; newlyUnlocked: string[];
   } | null>;
@@ -368,6 +369,18 @@ export const useStore = create<AppState>((set) => ({
     } catch (error: any) {
       Toast.show({ type: 'error', text1: 'Could not create goal', text2: error.response?.data?.message || error.message });
       return null;
+    }
+  },
+
+  deleteGoal: async (goalId) => {
+    try {
+      await axios.delete(`${API_URL}/goals/${goalId}`);
+      set((state) => ({ goals: state.goals.filter(g => g._id !== goalId) }));
+      Toast.show({ type: 'success', text1: 'Goal deleted', text2: 'The goal has been removed.' });
+      return true;
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Could not delete goal', text2: error.response?.data?.message || error.message });
+      return false;
     }
   },
 
