@@ -100,6 +100,9 @@ module.exports = {
   generateInsights,
   scanReceiptWithAI,
   chatWithAI,
+  generateGoalPlan,
+  generateCoachMessage,
+  generateImpactLine,
 };
 
 // ─── Receipt Scanner ─────────────────────────────────────────────────────────
@@ -203,5 +206,99 @@ ${JSON.stringify(recentTransactions)}`;
   } catch (error) {
     console.error('Chatbot AI error:', error);
     throw new Error('The assistant is temporarily unavailable. Please try again in a moment.');
+  }
+}
+
+// ─── Goal Journey: creation plan (step 5) ────────────────────────────────────
+async function generateGoalPlan({ title, targetAmount, deadline, avgMonthlySaving }) {
+  try {
+    const prompt = `Given a savings goal of ₹${targetAmount} for "${title}"${deadline ? ` by ${deadline}` : ' with no fixed deadline'},
+and this user's trailing average monthly saving of ₹${avgMonthlySaving ?? 0}:
+Compute the required monthly, weekly, and daily saving amounts to hit the target by the deadline (or a realistic pace if no deadline is set).
+Also give a realistic projected completion date (ISO 8601, e.g. "2026-12-31"), and ONE short, warm, specific motivational line (max 18 words) about this exact goal.
+If the deadline is unrealistic at the user's current saving rate, say so honestly in the motivational line instead of inflating the plan.`;
+
+    const responseSchema = {
+      type: 'object',
+      properties: {
+        requiredMonthly: { type: 'number' },
+        requiredWeekly: { type: 'number' },
+        requiredDaily: { type: 'number' },
+        projectedCompletionDate: { type: 'string', description: 'ISO 8601 date' },
+        motivationalLine: { type: 'string' },
+      },
+      required: ['requiredMonthly', 'requiredWeekly', 'requiredDaily', 'projectedCompletionDate', 'motivationalLine'],
+    };
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-flash-latest',
+      contents: prompt,
+      config: { responseMimeType: 'application/json', responseSchema },
+    });
+
+    return JSON.parse(response.text);
+  } catch (error) {
+    console.error('Goal plan AI error:', error);
+    // Deterministic fallback so goal creation never hard-fails on an AI outage.
+    const days = deadline ? Math.max(1, Math.ceil((new Date(deadline) - new Date()) / 86400000)) : 180;
+    return {
+      requiredMonthly: Math.ceil((targetAmount / days) * 30),
+      requiredWeekly: Math.ceil((targetAmount / days) * 7),
+      requiredDaily: Math.ceil(targetAmount / days),
+      projectedCompletionDate: deadline || new Date(Date.now() + days * 86400000).toISOString(),
+      motivationalLine: `Stay consistent and "${title}" is within reach.`,
+    };
+  }
+}
+
+// ─── Goal Journey: AI coach message (goal hub, rate-limited 1/session) ───────
+async function generateCoachMessage({ goalTitle, savedAmount, targetAmount, recentTransactions, recentMessages = [] }) {
+  try {
+    const txSummary = (recentTransactions || []).slice(0, 30).map(t => ({
+      amount: t.amount, type: t.type, category: t.category, date: t.date,
+    }));
+
+    const prompt = `Given this user's last 30 transactions (JSON below) and their goal progress
+(₹${savedAmount} saved of ₹${targetAmount} toward "${goalTitle}"),
+write ONE short coach message (max 24 words) referencing a REAL pattern in their data —
+an under-spent category, a saving streak, or a comparison to typical spending.
+Never repeat the meaning of any of these previous messages: ${JSON.stringify(recentMessages)}.
+Tone: warm, specific, never guilt-inducing.
+
+Transactions: ${JSON.stringify(txSummary)}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-flash-latest',
+      contents: prompt,
+    });
+
+    return response.text?.trim().replace(/^"|"$/g, '') || `You're making steady progress toward ${goalTitle}. Keep going.`;
+  } catch (error) {
+    console.error('Coach message AI error:', error);
+    return `You're making steady progress toward ${goalTitle}. Keep going.`;
+  }
+}
+
+// ─── Goal Journey: expense/contribution impact line (toast) ─────────────────
+async function generateImpactLine({ amount, category, goalTitle, dayDelta, direction }) {
+  try {
+    const verb = direction === 'boost' ? 'moved you closer to' : 'delayed';
+    const prompt = `An amount of ₹${amount}${category ? ` in "${category}"` : ''} was just ${direction === 'boost' ? 'added toward' : 'spent, affecting'} the goal "${goalTitle}".
+This ${verb} the goal by ${dayDelta} day(s). State this plainly and warmly in under 12 words. Never sound guilt-inducing or alarmed.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-flash-latest',
+      contents: prompt,
+    });
+
+    return response.text?.trim().replace(/^"|"$/g, '') ||
+      (direction === 'boost'
+        ? `You moved ${dayDelta} day(s) closer to ${goalTitle}.`
+        : `This delays ${goalTitle} by ${dayDelta} day(s).`);
+  } catch (error) {
+    console.error('Impact line AI error:', error);
+    return direction === 'boost'
+      ? `You moved ${dayDelta} day(s) closer to ${goalTitle}.`
+      : `This delays ${goalTitle} by ${dayDelta} day(s).`;
   }
 }

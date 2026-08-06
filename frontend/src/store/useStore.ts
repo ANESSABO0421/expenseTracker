@@ -32,6 +32,57 @@ export interface Insight {
   color: string;
 }
 
+export interface Goal {
+  _id: string;
+  user: string;
+  title: string;
+  category: 'tech' | 'travel' | 'home' | 'vehicle' | 'education' | 'wedding' | 'gaming' | 'custom';
+  emoji: string;
+  imageUrl?: string;
+  targetAmount: number;
+  savedAmount: number;
+  deadline: string | null;
+  projectedCompletionDate: string | null;
+  requiredMonthly: number;
+  requiredWeekly: number;
+  requiredDaily: number;
+  status: 'active' | 'completed' | 'archived';
+  isPrimary: boolean;
+  milestonesReached: number[];
+  lastCoachMessage?: string;
+  percent: number;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface GoalPlan {
+  requiredMonthly: number;
+  requiredWeekly: number;
+  requiredDaily: number;
+  projectedCompletionDate: string;
+  motivationalLine: string;
+}
+
+export interface SavingStreak {
+  currentStreak: number;
+  longestStreak: number;
+  lastSavedDate: string | null;
+  history: string[];
+}
+
+export interface GoalContribution {
+  _id: string;
+  goal: string;
+  amount: number;
+  source: string;
+  note: string | null;
+  photoUrl: string | null;
+  runningTotal: number;
+  dayDelta: number;
+  milestonesCrossed: number[];
+  createdAt: string;
+}
+
 interface AppState {
   user: User | null;
   transactions: Transaction[];
@@ -61,6 +112,19 @@ interface AppState {
   // Global Theme
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+
+  // Goal Journey
+  goals: Goal[];
+  isLoadingGoals: boolean;
+  streak: SavingStreak | null;
+  fetchGoals: (userId: string) => Promise<void>;
+  getGoalPlan: (payload: { title: string; targetAmount: number; deadline?: string | null; avgMonthlySaving?: number }) => Promise<GoalPlan | null>;
+  createGoal: (payload: Partial<Goal> & { user: string; title: string; targetAmount: number }) => Promise<Goal | null>;
+  contributeToGoal: (goalId: string, amount: number, opts?: { source?: string; note?: string; photoUrl?: string }) => Promise<{
+    goal: Goal; milestonesCrossed: number[]; streak: SavingStreak | null; newlyUnlocked: string[];
+  } | null>;
+  fetchGoalTimeline: (goalId: string, page?: number) => Promise<GoalContribution[]>;
+  fetchCoachMessage: (goalId: string) => Promise<string | null>;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -74,6 +138,9 @@ export const useStore = create<AppState>((set) => ({
   exchangeRates: { 'USD': 1 },
   enableConversion: false,
   theme: 'light',
+  goals: [],
+  isLoadingGoals: false,
+  streak: null,
 
   toggleTheme: () => {
     set((state) => {
@@ -267,5 +334,80 @@ export const useStore = create<AppState>((set) => ({
     } catch (error: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update transaction' });
     }
-  }
+  },
+
+  // ── Goal Journey ──────────────────────────────────────────────────────────
+  fetchGoals: async (userId) => {
+    set({ isLoadingGoals: true });
+    try {
+      const response = await axios.get(`${API_URL}/goals/user/${userId}`);
+      set({ goals: response.data.data, streak: response.data.streak, isLoadingGoals: false });
+    } catch (error: any) {
+      set({ isLoadingGoals: false });
+      console.error('Failed to fetch goals:', error.message);
+    }
+  },
+
+  getGoalPlan: async (payload) => {
+    try {
+      const response = await axios.post(`${API_URL}/goals/plan`, payload);
+      return response.data.data as GoalPlan;
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Could not generate plan', text2: error.response?.data?.message || error.message });
+      return null;
+    }
+  },
+
+  createGoal: async (payload) => {
+    try {
+      const response = await axios.post(`${API_URL}/goals`, payload);
+      const newGoal = response.data.data as Goal;
+      set((state) => ({ goals: [newGoal, ...state.goals] }));
+      Toast.show({ type: 'success', text1: 'Goal created!', text2: `"${newGoal.title}" is on its way.` });
+      return newGoal;
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Could not create goal', text2: error.response?.data?.message || error.message });
+      return null;
+    }
+  },
+
+  contributeToGoal: async (goalId, amount, opts) => {
+    try {
+      const response = await axios.post(`${API_URL}/goals/${goalId}/contribute`, { amount, ...opts });
+      const { goal, milestonesCrossed, streak, newlyUnlocked } = response.data.data;
+      set((state) => ({
+        goals: state.goals.map(g => g._id === goalId ? goal : g),
+        streak: streak || state.streak,
+      }));
+      return { goal, milestonesCrossed, streak, newlyUnlocked };
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Could not update goal', text2: error.response?.data?.message || error.message });
+      return null;
+    }
+  },
+
+  fetchGoalTimeline: async (goalId, page = 1) => {
+    try {
+      const response = await axios.get(`${API_URL}/goals/${goalId}/timeline`, { params: { page } });
+      return response.data.data as GoalContribution[];
+    } catch (error: any) {
+      console.error('Failed to fetch timeline:', error.message);
+      return [];
+    }
+  },
+
+  fetchCoachMessage: async (goalId) => {
+    try {
+      const { transactions } = useStore.getState();
+      const response = await axios.post(`${API_URL}/goals/${goalId}/coach-message`, { transactions });
+      const message = response.data.data.message as string;
+      set((state) => ({
+        goals: state.goals.map(g => g._id === goalId ? { ...g, lastCoachMessage: message } : g),
+      }));
+      return message;
+    } catch (error: any) {
+      console.error('Failed to fetch coach message:', error.message);
+      return null;
+    }
+  },
 }));

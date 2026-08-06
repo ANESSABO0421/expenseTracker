@@ -11,12 +11,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'nativewind';
 import { useStore, Transaction } from '../store/useStore';
 import AnimatedCard from '../components/AnimatedCard';
+import GoalHomeCard from '../components/GoalHomeCard';
 import { formatCurrency } from '../utils/formatCurrency';
 
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen({ navigation }: any) {
-  const { user, transactions, fetchTransactions, isLoading, currency, exchangeRates, enableConversion } = useStore();
+  const { user, transactions, fetchTransactions, isLoading, currency, exchangeRates, enableConversion, goals, fetchGoals } = useStore();
   const [chartType, setChartType] = useState<'line' | 'bar' | 'donut'>('line');
   const { colorScheme, toggleColorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -36,8 +37,11 @@ export default function DashboardScreen({ navigation }: any) {
   const pulseOpacity = useSharedValue(0.6);
 
   useEffect(() => {
-    if (user?._id) fetchTransactions(user._id);
-    
+    if (user?._id) {
+      fetchTransactions(user._id);
+      fetchGoals(user._id);
+    }
+
     // Start avatar pulse animation
     pulseScale.value = withRepeat(
       withSequence(
@@ -71,6 +75,11 @@ export default function DashboardScreen({ navigation }: any) {
     });
     return { totalIncome: income, totalExpense: expense, balance: income - expense };
   }, [transactions]);
+
+  const primaryActiveGoal = useMemo(() => {
+    const active = goals.filter(g => g.status === 'active');
+    return active.find(g => g.isPrimary) || active[0] || null;
+  }, [goals]);
 
   const CATEGORY_PALETTE = ['#007AFF', '#FF9500', '#34C759', '#AF52DE', '#FF3B30', '#5AC8FA', '#FFCC00', '#FF2D55'];
 
@@ -233,6 +242,42 @@ export default function DashboardScreen({ navigation }: any) {
               </View>
             </View>
           </LinearGradient>
+        </AnimatedCard>
+
+        {/* Goal Journey */}
+        <AnimatedCard delay={85}>
+          <View style={{ marginHorizontal: 20, marginBottom: 16 }}>
+            {primaryActiveGoal ? (
+              <>
+                <GoalHomeCard
+                  goal={primaryActiveGoal}
+                  onPress={() => navigation.navigate('GoalDetail', { goalId: primaryActiveGoal._id })}
+                />
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('GoalCreation')}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 4 }}
+                >
+                  <Ionicons name="add" size={14} color={textSecondary} />
+                  <Text style={{ fontSize: 12.5, fontWeight: '600', color: textSecondary }}>New goal</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('GoalCreation')}
+                style={[styles.goalEmptyState, { backgroundColor: cardBg, borderColor: separator }]}
+              >
+                <View style={styles.goalEmptyIcon}>
+                  <Ionicons name="sparkles" size={20} color="#D4B26A" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.goalEmptyTitle, { color: textPrimary }]}>Start a savings goal</Text>
+                  <Text style={[styles.goalEmptySub, { color: textSecondary }]}>MacBook, a trip, a home — give your saving a destination.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
         </AnimatedCard>
 
         {/* Chart Card */}
@@ -449,6 +494,10 @@ const styles = StyleSheet.create({
   segment: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 6 },
   segmentText: { fontSize: 13, fontWeight: '600' },
   chartContainer: { paddingHorizontal: 12, paddingBottom: 16 },
+  goalEmptyState: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, borderWidth: 1, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  goalEmptyIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(212,178,106,0.14)', alignItems: 'center', justifyContent: 'center' },
+  goalEmptyTitle: { fontSize: 15, fontWeight: '700' },
+  goalEmptySub: { fontSize: 12.5, marginTop: 2, lineHeight: 17 },
   legendRow: { flexDirection: 'row', gap: 16, paddingHorizontal: 20, marginBottom: 4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },

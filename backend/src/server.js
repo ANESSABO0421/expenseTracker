@@ -8,6 +8,8 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const insightRoutes = require('./routes/insightRoutes');
 const scanReceiptRoute = require('./routes/scanReceiptRoute');
 const chatRoute = require('./routes/chatRoute');
+const goalRoutes = require('./routes/goalRoutes');
+const achievementsRoutes = require('./routes/achievementsRoutes');
 const { errorHandler } = require('./middleware/errorMiddleware');
 
 // Load env vars
@@ -36,6 +38,8 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/insights', insightRoutes);
 app.use('/api/scan-receipt', scanReceiptRoute);
 app.use('/api/chat', chatRoute);
+app.use('/api/goals', goalRoutes);
+app.use('/api/achievements', achievementsRoutes);
 
 // Error Middleware
 app.use(errorHandler);
