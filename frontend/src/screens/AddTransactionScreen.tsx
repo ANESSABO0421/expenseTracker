@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from 'nativewind';
-import { useStore } from '../store/useStore';
+import { useStore, API_URL } from '../store/useStore';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
@@ -97,7 +97,7 @@ export default function AddTransactionScreen({ navigation }: any) {
     try {
       const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
 
-      const response = await fetch('http://192.168.1.4:5001/api/scan-receipt', {
+      const response = await fetch(`${API_URL}/scan-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64Image }),
