@@ -7,9 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from 'nativewind';
-import axios from 'axios';
 import Toast from 'react-native-toast-message';
-import { useStore, API_URL } from '../store/useStore';
+import { useStore } from '../store/useStore';
+import { api } from '../utils/api';
 
 interface ChatMessage {
   id: string;
@@ -65,7 +65,7 @@ export default function ChatAssistantScreen({ navigation }: any) {
         .filter(m => m.id !== 'welcome')
         .map(m => ({ role: m.role, text: m.text }));
 
-      const response = await axios.post(`${API_URL}/chat`, {
+      const response = await api.post(`/chat`, {
         question,
         transactions,
         history: history.slice(0, -1), // exclude the question itself, sent separately

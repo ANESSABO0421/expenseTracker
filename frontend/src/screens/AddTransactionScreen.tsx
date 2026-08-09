@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from 'nativewind';
-import { useStore, API_URL } from '../store/useStore';
+import { useStore } from '../store/useStore';
+import { api } from '../utils/api';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
@@ -97,15 +98,10 @@ export default function AddTransactionScreen({ navigation }: any) {
     try {
       const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
 
-      const response = await fetch(`${API_URL}/scan-receipt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64Image }),
-      });
+      const response = await api.post(`/scan-receipt`, { base64Image });
+      const data = response.data;
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.message || 'Server error during receipt scan');
       }
 
@@ -125,7 +121,7 @@ export default function AddTransactionScreen({ navigation }: any) {
       Toast.show({
         type: 'error',
         text1: 'Scan Failed',
-        text2: err.message || 'Could not read the receipt. Please try again.',
+        text2: err?.response?.data?.message || err.message || 'Could not read the receipt. Please try again.',
       });
     } finally {
       setIsScanning(false);

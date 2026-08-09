@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import Preloader from './src/components/Preloader';
 import AppNavigator from './src/navigation/AppNavigator';
+import ServerWakingBanner from './src/components/ServerWakingBanner';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { useStore } from './src/store/useStore';
+import { warmBackend } from './src/utils/api';
 import { Platform, UIManager } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -21,6 +24,11 @@ export default function App() {
   const { restoreSession } = useStore();
 
   useEffect(() => {
+    // Kick Render awake immediately. Deliberately not awaited — the splash and
+    // session restore proceed while the container boots in the background, so
+    // the cold start overlaps the splash instead of stalling the dashboard.
+    warmBackend();
+
     (async () => {
       try {
         await restoreSession();
@@ -45,10 +53,13 @@ export default function App() {
   }
 
   return (
-    <>
+    // SafeAreaProvider is needed here because the banner sits outside
+    // NavigationContainer, which otherwise supplies its own compat provider.
+    <SafeAreaProvider>
       <StatusBar style="light" />
       <AppNavigator />
+      <ServerWakingBanner />
       <Toast />
-    </>
+    </SafeAreaProvider>
   );
 }

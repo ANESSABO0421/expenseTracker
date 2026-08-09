@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { api, onWakingChange } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 
-export const API_URL = 'https://expensetracker-4g98.onrender.com/api';
+// Re-exported so existing `import { API_URL } from '../store/useStore'` keeps working.
+export { API_URL } from '../utils/api';
 
 export interface User {
   _id: string;
@@ -88,6 +90,9 @@ interface AppState {
   transactions: Transaction[];
   isLoading: boolean;
   error: string | null;
+  /** True when a request has been in flight long enough that Render is almost
+   *  certainly cold-starting — screens use this to explain the wait. */
+  isServerWaking: boolean;
   restoreSession: () => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -133,6 +138,7 @@ export const useStore = create<AppState>((set) => ({
   transactions: [],
   isLoading: false,
   error: null,
+  isServerWaking: false,
   insights: [],
   isGeneratingInsights: false,
   currency: 'USD',
@@ -178,7 +184,7 @@ export const useStore = create<AppState>((set) => ({
   register: async (name, email, password) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.post(`${API_URL}/auth/register`, { name, email, password });
+      const response = await api.post(`/auth/register`, { name, email, password });
       const userData = response.data;
       await AsyncStorage.setItem('user_session', JSON.stringify(userData));
       set({ user: userData, isLoading: false });
@@ -201,7 +207,7 @@ export const useStore = create<AppState>((set) => ({
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, { email, password });
+      const response = await api.post(`/auth/login`, { email, password });
       const userData = response.data;
       await AsyncStorage.setItem('user_session', JSON.stringify(userData));
       set({ user: userData, isLoading: false });
@@ -224,7 +230,7 @@ export const useStore = create<AppState>((set) => ({
   googleLogin: async (googleId, email, name, avatar) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.post(`${API_URL}/auth/google`, { googleId, email, name, avatar });
+      const response = await api.post(`/auth/google`, { googleId, email, name, avatar });
       const userData = response.data;
       await AsyncStorage.setItem('user_session', JSON.stringify(userData));
       set({ user: userData, isLoading: false });
@@ -256,7 +262,7 @@ export const useStore = create<AppState>((set) => ({
   fetchTransactions: async (userId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.get(`${API_URL}/transactions/user/${userId}`);
+      const response = await api.get(`/transactions/user/${userId}`);
       set({ transactions: response.data.data, isLoading: false });
     } catch (error: any) {
       set({ error: error.message || 'Failed to fetch transactions', isLoading: false });
@@ -266,7 +272,7 @@ export const useStore = create<AppState>((set) => ({
   addTransaction: async (transactionData) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.post(`${API_URL}/transactions`, transactionData);
+      const response = await api.post(`/transactions`, transactionData);
       const newTransaction = response.data.data;
       set((state) => ({
         transactions: [newTransaction, ...state.transactions],
@@ -280,7 +286,7 @@ export const useStore = create<AppState>((set) => ({
   generateInsights: async (transactions) => {
     set({ isGeneratingInsights: true, error: null });
     try {
-      const response = await axios.post(`${API_URL}/insights`, { transactions });
+      const response = await api.post(`/insights`, { transactions });
       set({ insights: response.data.data, isGeneratingInsights: false });
     } catch (error: any) {
       set({ error: error.message || 'Failed to generate insights', isGeneratingInsights: false });
@@ -315,7 +321,7 @@ export const useStore = create<AppState>((set) => ({
 
   deleteTransaction: async (id) => {
     try {
-      await axios.delete(`${API_URL}/transactions/${id}`);
+      await api.delete(`/transactions/${id}`);
       set((state) => ({
         transactions: state.transactions.filter(t => t._id !== id)
       }));
@@ -327,7 +333,7 @@ export const useStore = create<AppState>((set) => ({
 
   updateTransaction: async (id, data) => {
     try {
-      const response = await axios.put(`${API_URL}/transactions/${id}`, data);
+      const response = await api.put(`/transactions/${id}`, data);
       set((state) => ({
         transactions: state.transactions.map(t => t._id === id ? response.data.data : t)
       }));
@@ -341,7 +347,7 @@ export const useStore = create<AppState>((set) => ({
   fetchGoals: async (userId) => {
     set({ isLoadingGoals: true });
     try {
-      const response = await axios.get(`${API_URL}/goals/user/${userId}`);
+      const response = await api.get(`/goals/user/${userId}`);
       set({ goals: response.data.data, streak: response.data.streak, isLoadingGoals: false });
     } catch (error: any) {
       set({ isLoadingGoals: false });
@@ -351,7 +357,7 @@ export const useStore = create<AppState>((set) => ({
 
   getGoalPlan: async (payload) => {
     try {
-      const response = await axios.post(`${API_URL}/goals/plan`, payload);
+      const response = await api.post(`/goals/plan`, payload);
       return response.data.data as GoalPlan;
     } catch (error: any) {
       Toast.show({ type: 'error', text1: 'Could not generate plan', text2: error.response?.data?.message || error.message });
@@ -361,7 +367,7 @@ export const useStore = create<AppState>((set) => ({
 
   createGoal: async (payload) => {
     try {
-      const response = await axios.post(`${API_URL}/goals`, payload);
+      const response = await api.post(`/goals`, payload);
       const newGoal = response.data.data as Goal;
       set((state) => ({ goals: [newGoal, ...state.goals] }));
       Toast.show({ type: 'success', text1: 'Goal created!', text2: `"${newGoal.title}" is on its way.` });
@@ -374,7 +380,7 @@ export const useStore = create<AppState>((set) => ({
 
   deleteGoal: async (goalId) => {
     try {
-      await axios.delete(`${API_URL}/goals/${goalId}`);
+      await api.delete(`/goals/${goalId}`);
       set((state) => ({ goals: state.goals.filter(g => g._id !== goalId) }));
       Toast.show({ type: 'success', text1: 'Goal deleted', text2: 'The goal has been removed.' });
       return true;
@@ -386,7 +392,7 @@ export const useStore = create<AppState>((set) => ({
 
   contributeToGoal: async (goalId, amount, opts) => {
     try {
-      const response = await axios.post(`${API_URL}/goals/${goalId}/contribute`, { amount, ...opts });
+      const response = await api.post(`/goals/${goalId}/contribute`, { amount, ...opts });
       const { goal, milestonesCrossed, streak, newlyUnlocked } = response.data.data;
       set((state) => ({
         goals: state.goals.map(g => g._id === goalId ? goal : g),
@@ -401,7 +407,7 @@ export const useStore = create<AppState>((set) => ({
 
   fetchGoalTimeline: async (goalId, page = 1) => {
     try {
-      const response = await axios.get(`${API_URL}/goals/${goalId}/timeline`, { params: { page } });
+      const response = await api.get(`/goals/${goalId}/timeline`, { params: { page } });
       return response.data.data as GoalContribution[];
     } catch (error: any) {
       console.error('Failed to fetch timeline:', error.message);
@@ -412,7 +418,7 @@ export const useStore = create<AppState>((set) => ({
   fetchCoachMessage: async (goalId) => {
     try {
       const { transactions } = useStore.getState();
-      const response = await axios.post(`${API_URL}/goals/${goalId}/coach-message`, { transactions });
+      const response = await api.post(`/goals/${goalId}/coach-message`, { transactions });
       const message = response.data.data.message as string;
       set((state) => ({
         goals: state.goals.map(g => g._id === goalId ? { ...g, lastCoachMessage: message } : g),
@@ -424,3 +430,7 @@ export const useStore = create<AppState>((set) => ({
     }
   },
 }));
+
+// Mirror the api layer's cold-start signal into store state so any screen can
+// read `isServerWaking` without importing the axios plumbing directly.
+onWakingChange((waking) => useStore.setState({ isServerWaking: waking }));

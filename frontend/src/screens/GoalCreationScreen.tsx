@@ -8,9 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColorScheme } from 'nativewind';
 import * as ImagePicker from 'expo-image-picker';
-import axios from 'axios';
 import Toast from 'react-native-toast-message';
-import { useStore, API_URL, GoalPlan } from '../store/useStore';
+import { useStore, GoalPlan } from '../store/useStore';
+import { api } from '../utils/api';
 import { formatCurrency } from '../utils/formatCurrency';
 
 const GOLD = '#D4B26A';
@@ -105,7 +105,7 @@ export default function GoalCreationScreen({ navigation }: any) {
     setIsUploadingImage(true);
     try {
       const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      const response = await axios.post(`${API_URL}/upload`, { base64Image });
+      const response = await api.post(`/upload`, { base64Image });
       setImageUrl(response.data.data.receiptUrl);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Upload failed', text2: 'Using the default look instead.' });
