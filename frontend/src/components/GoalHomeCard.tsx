@@ -1,30 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
-import { useColorScheme } from 'nativewind';
+import { Ionicons } from '@expo/vector-icons';
 import { Goal, useStore } from '../store/useStore';
 import { formatCurrency } from '../utils/formatCurrency';
-import { Ionicons } from '@expo/vector-icons';
+import PressableScale from './ui/PressableScale';
+import { useTheme, brand, shadow } from '../theme';
 
-const GOLD = '#D4B26A';
-const EMERALD = '#48C79A';
-const FIRE_RED = '#FF6B35';
-
-const RING_RADIUS = 36;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const RING = 30;
+const CIRC = 2 * Math.PI * RING;
 
 function daysLeft(deadline: string | null): number | null {
   if (!deadline) return null;
-  const diff = new Date(deadline).getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / 86400000));
+  return Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000));
 }
 
 export default function GoalHomeCard({ goal, onPress }: { goal: Goal; onPress: () => void }) {
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { c, isDark } = useTheme();
   const { currency, exchangeRates, enableConversion, fetchCoachMessage, streak } = useStore();
-
+  const rates = enableConversion ? exchangeRates : null;
   const [coachLine, setCoachLine] = useState(goal.lastCoachMessage || '');
 
   useEffect(() => {
@@ -33,156 +28,111 @@ export default function GoalHomeCard({ goal, onPress }: { goal: Goal; onPress: (
     }
   }, [goal._id]);
 
-  const ringTrack = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.07)';
-  const cardBg = isDark ? '#161923' : '#FFFFFF';
-
-  const remaining = Math.max(0, goal.targetAmount - goal.savedAmount);
+  const pct = Math.min(100, goal.percent);
   const left = daysLeft(goal.deadline);
-  const dashOffset = RING_CIRCUMFERENCE * (1 - goal.percent / 100);
-  const pct = goal.percent;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      onPress={onPress}
-      style={{
-        borderRadius: 24,
-        overflow: 'hidden',
-        backgroundColor: cardBg,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: isDark ? 0.35 : 0.12,
-        shadowRadius: 20,
-        elevation: 6,
-      }}
-    >
-      {/* ── Hero image ── */}
-      <View style={{ height: 140 }}>
+    <PressableScale onPress={onPress} scaleTo={0.98} style={[styles.card, { backgroundColor: c.surface }, shadow(c, 2)]}>
+      {/* Hero */}
+      <View style={styles.hero}>
         {goal.imageUrl ? (
           <Image source={{ uri: goal.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
           <LinearGradient
-            colors={isDark ? ['#3a3226', '#1d1710'] : ['#EDE3CE', '#D8C89A']}
-            style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+            colors={isDark ? ['#3A2E22', '#1A1510'] : ['#FFE7D6', '#FFD0B5']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, { alignItems: 'flex-end', justifyContent: 'center', paddingRight: 28 }]}
           >
-            <Text style={{ fontSize: 38 }}>{goal.emoji}</Text>
+            <Text style={{ fontSize: 56, opacity: 0.9 }}>{goal.emoji}</Text>
           </LinearGradient>
         )}
-        {/* Gradient scrim */}
         <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.62)']}
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
+          start={{ x: 0, y: 0.2 }} end={{ x: 0, y: 1 }}
           style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0.3 }}
-          end={{ x: 0, y: 1 }}
         />
-        {/* Goal title */}
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14 }}>
-          <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 }}>
-            {goal.title}
-          </Text>
+        <View style={styles.heroTopRow}>
+          <View style={styles.tag}>
+            <Ionicons name="flag" size={11} color="#FFF" />
+            <Text style={styles.tagText}>SAVINGS GOAL</Text>
+          </View>
+          {streak && streak.currentStreak >= 1 && (
+            <LinearGradient colors={[brand.fire, brand.gold]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.tag}>
+              <Text style={{ fontSize: 11 }}>🔥</Text>
+              <Text style={styles.tagText}>{streak.currentStreak} DAY STREAK</Text>
+            </LinearGradient>
+          )}
+        </View>
+        <View style={styles.heroBottom}>
+          <Text style={styles.heroTitle} numberOfLines={1}>{goal.title}</Text>
           {left !== null && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-              <Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.75)" />
-              <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '600' }}>
-                {left} days left
-              </Text>
+            <Text style={styles.heroSub}>{left} days left</Text>
+          )}
+        </View>
+      </View>
+
+      {/* Stats + ring */}
+      <View style={styles.body}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.amount, { color: c.text }]}>
+            {formatCurrency(goal.savedAmount, currency, rates)}
+            <Text style={[styles.of, { color: c.textTertiary }]}>  of {formatCurrency(goal.targetAmount, currency, rates)}</Text>
+          </Text>
+          <View style={[styles.track, { backgroundColor: c.surfaceAlt }]}>
+            <LinearGradient
+              colors={[brand.gold, brand.emerald]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={{ height: '100%', width: `${pct}%`, borderRadius: 4 }}
+            />
+          </View>
+          {!!coachLine && (
+            <View style={styles.coachRow}>
+              <Ionicons name="sparkles" size={12} color={brand.gold} />
+              <Text style={[styles.coach, { color: c.textSecondary }]} numberOfLines={2}>{coachLine}</Text>
             </View>
           )}
         </View>
 
-        {/* Streak pill — top right */}
-        {streak && streak.currentStreak >= 1 && (
-          <View style={{ position: 'absolute', top: 10, right: 10 }}>
-            <LinearGradient
-              colors={[FIRE_RED, GOLD]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
-            >
-              <Text style={{ fontSize: 12 }}>🔥</Text>
-              <Text style={{ color: '#FFF', fontSize: 11.5, fontWeight: '800' }}>
-                {streak.currentStreak}d
-              </Text>
-            </LinearGradient>
-          </View>
-        )}
-      </View>
-
-      {/* ── AI coach line ── */}
-      {!!coachLine && (
-        <View style={{
-          marginHorizontal: 14, marginTop: 12,
-          backgroundColor: isDark ? 'rgba(212,178,106,0.1)' : 'rgba(212,178,106,0.12)',
-          borderRadius: 12, padding: 10,
-          borderLeftWidth: 3, borderLeftColor: GOLD,
-        }}>
-          <Text
-            style={{ fontSize: 12.5, fontStyle: 'italic', fontWeight: '600', lineHeight: 17, color: isDark ? '#EDEAE1' : '#3a2f1e' }}
-            numberOfLines={2}
-          >
-            "{coachLine}"
-          </Text>
-        </View>
-      )}
-
-      {/* ── Stats + ring ── */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14, gap: 12 }}>
-        {/* Stats */}
-        <View style={{ flex: 1, gap: 8 }}>
-          <View>
-            <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7, color: EMERALD }}>
-              Saved
-            </Text>
-            <Text style={{ fontSize: 17, fontWeight: '800', color: isDark ? '#EDEAE1' : '#211C13', marginTop: 1 }}>
-              {formatCurrency(goal.savedAmount, currency, enableConversion ? exchangeRates : null)}
-            </Text>
-          </View>
-          <View>
-            <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7, color: isDark ? '#9A98A6' : '#A09070' }}>
-              Still need
-            </Text>
-            <Text style={{ fontSize: 17, fontWeight: '800', color: isDark ? '#EDEAE1' : '#211C13', marginTop: 1 }}>
-              {formatCurrency(remaining, currency, enableConversion ? exchangeRates : null)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Ring */}
-        <View style={{ width: 90, height: 90, alignItems: 'center', justifyContent: 'center' }}>
-          <Svg width={90} height={90} viewBox="0 0 90 90">
+        <View style={styles.ringWrap}>
+          <Svg width={76} height={76} viewBox="0 0 76 76">
             <Defs>
               <SvgGradient id="ringGradHome" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0%" stopColor={GOLD} />
-                <Stop offset="100%" stopColor={EMERALD} />
+                <Stop offset="0%" stopColor={brand.gold} />
+                <Stop offset="100%" stopColor={brand.emerald} />
               </SvgGradient>
             </Defs>
-            <Circle cx="45" cy="45" r={RING_RADIUS} stroke={ringTrack} strokeWidth="9" fill="none" />
+            <Circle cx="38" cy="38" r={RING} stroke={c.surfaceAlt} strokeWidth="8" fill="none" />
             <Circle
-              cx="45" cy="45" r={RING_RADIUS}
-              stroke="url(#ringGradHome)" strokeWidth="9" fill="none"
-              strokeDasharray={RING_CIRCUMFERENCE}
-              strokeDashoffset={dashOffset}
+              cx="38" cy="38" r={RING}
+              stroke="url(#ringGradHome)" strokeWidth="8" fill="none"
+              strokeDasharray={CIRC}
+              strokeDashoffset={CIRC * (1 - pct / 100)}
               strokeLinecap="round"
-              rotation="-90" origin="45,45"
+              rotation="-90" origin="38,38"
             />
           </Svg>
-          <View style={{ position: 'absolute', alignItems: 'center' }}>
-            <Text style={{ fontSize: 17, fontWeight: '900', color: isDark ? '#EDEAE1' : '#211C13', letterSpacing: -0.5 }}>
-              {pct}%
-            </Text>
-          </View>
+          <Text style={[styles.pct, { color: c.text }]}>{goal.percent}%</Text>
         </View>
       </View>
-
-      {/* ── Progress bar ── */}
-      <View style={{ marginHorizontal: 14, marginBottom: 14 }}>
-        <View style={{ height: 5, borderRadius: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <LinearGradient
-            colors={[GOLD, EMERALD]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={{ height: '100%', width: `${Math.min(100, pct)}%`, borderRadius: 3 }}
-          />
-        </View>
-      </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
+
+const styles = StyleSheet.create({
+  card: { borderRadius: 22, overflow: 'hidden' },
+  hero: { height: 120, justifyContent: 'space-between' },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 12 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.35)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20 },
+  tagText: { color: '#FFF', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8 },
+  heroBottom: { paddingHorizontal: 14, paddingBottom: 12 },
+  heroTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  heroSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  body: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 14 },
+  amount: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
+  of: { fontSize: 12.5, fontWeight: '600' },
+  track: { height: 7, borderRadius: 4, overflow: 'hidden', marginTop: 10 },
+  coachRow: { flexDirection: 'row', gap: 6, marginTop: 10, alignItems: 'flex-start' },
+  coach: { flex: 1, fontSize: 12.5, fontWeight: '600', lineHeight: 17, fontStyle: 'italic' },
+  ringWrap: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center' },
+  pct: { position: 'absolute', fontSize: 15, fontWeight: '900', letterSpacing: -0.4 },
+});

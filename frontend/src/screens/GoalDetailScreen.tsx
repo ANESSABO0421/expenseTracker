@@ -1,36 +1,34 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, Image, ScrollView, TextInput,
-  ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Alert, Dimensions
+  View, Text, Image, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import Animated, {
-  FadeIn, FadeOut, ZoomIn,
-  useSharedValue, withRepeat, withSequence, withTiming,
-  useAnimatedStyle, Easing,
+  FadeIn, FadeOut, ZoomIn, FadeInDown,
+  useSharedValue, withRepeat, withSequence, withTiming, useAnimatedStyle, Easing,
 } from 'react-native-reanimated';
-import { useColorScheme } from 'nativewind';
 import Toast from 'react-native-toast-message';
 import { useStore, GoalContribution } from '../store/useStore';
-import { formatCurrency } from '../utils/formatCurrency';
+import { formatCurrency, toBaseAmount, toDisplayAmount } from '../utils/formatCurrency';
+import { useTheme, brand, radius, shadow, CURRENCY_SYMBOLS } from '../theme';
+import { IconButton, PressableScale, PrimaryButton } from '../components/ui';
 
-const GOLD = '#D4B26A';
-const EMERALD = '#48C79A';
-const FIRE_RED = '#FF6B35';
+const GOAL_GRADIENT = [brand.gold, brand.emerald] as const;
 const MILESTONES = [5, 10, 25, 50, 75, 90, 100];
-
-const RING_RADIUS = 68;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const RING_RADIUS = 58;
+const RING_CIRC = 2 * Math.PI * RING_RADIUS;
 
 export default function GoalDetailScreen({ route, navigation }: any) {
   const { goalId } = route.params;
   const { goals, streak, currency, exchangeRates, enableConversion, contributeToGoal, fetchGoalTimeline, fetchCoachMessage, deleteGoal } = useStore();
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { c, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const rates = enableConversion ? exchangeRates : null;
+  const fmt = (n: number) => formatCurrency(n, currency, rates);
+  const symbol = CURRENCY_SYMBOLS[currency] || currency;
 
   const goal = goals.find(g => g._id === goalId);
 
@@ -42,80 +40,49 @@ export default function GoalDetailScreen({ route, navigation }: any) {
   const [showAddInput, setShowAddInput] = useState(false);
   const [celebration, setCelebration] = useState<number | null>(null);
 
-  // Streak fire pulse animation
   const fireScale = useSharedValue(1);
-  const fireOpacity = useSharedValue(0.9);
   useEffect(() => {
     fireScale.value = withRepeat(
       withSequence(
-        withTiming(1.18, { duration: 700, easing: Easing.out(Easing.ease) }),
+        withTiming(1.15, { duration: 700, easing: Easing.out(Easing.ease) }),
         withTiming(1, { duration: 700, easing: Easing.in(Easing.ease) }),
-      ),
-      -1, false
-    );
-    fireOpacity.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 700 }),
-        withTiming(0.75, { duration: 700 }),
-      ),
-      -1, false
-    );
+      ), -1, false);
   }, []);
-
-  const fireAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: fireScale.value }],
-    opacity: fireOpacity.value,
-  }));
-
-  // Colors
-  const ringTrack = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.07)';
-  const glassBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.85)';
-  const glassBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(20,16,8,0.08)';
-  const surfaceBg = isDark ? '#161923' : '#FFFFFF';
-
-  const handleDeleteGoal = () => {
-    Alert.alert(
-      'Delete Goal',
-      `Are you sure you want to delete "${goal?.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const ok = await deleteGoal(goalId);
-            if (ok) navigation.goBack();
-          },
-        },
-      ]
-    );
-  };
+  const fireStyle = useAnimatedStyle(() => ({ transform: [{ scale: fireScale.value }] }));
 
   const loadTimeline = useCallback(async () => {
     setIsLoadingTimeline(true);
-    const entries = await fetchGoalTimeline(goalId);
-    setTimeline(entries);
+    setTimeline(await fetchGoalTimeline(goalId));
     setIsLoadingTimeline(false);
   }, [goalId]);
 
   useEffect(() => {
     loadTimeline();
-    if (!goal?.lastCoachMessage) {
-      fetchCoachMessage(goalId).then(msg => msg && setCoachLine(msg));
-    }
+    if (!goal?.lastCoachMessage) fetchCoachMessage(goalId).then(msg => msg && setCoachLine(msg));
   }, [goalId]);
 
   if (!goal) {
     return (
-      <SafeAreaView className={`flex-1 items-center justify-center ${isDark ? 'bg-bgDark' : 'bg-bgLight'}`}>
-        <ActivityIndicator color={GOLD} size="large" />
+      <SafeAreaView style={[styles.container, styles.center, { backgroundColor: c.bg }]}>
+        <ActivityIndicator color={brand.gold} size="large" />
       </SafeAreaView>
     );
   }
 
   const remaining = Math.max(0, goal.targetAmount - goal.savedAmount);
-  const dashOffset = RING_CIRCUMFERENCE * (1 - goal.percent / 100);
   const pct = goal.percent;
+  const daysLeft = goal.deadline ? Math.max(0, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / 86400000)) : null;
+  const reachedCount = MILESTONES.filter(m => goal.milestonesReached.includes(m) || pct >= m).length;
+
+  const handleDeleteGoal = () => {
+    Alert.alert('Delete goal', `Delete "${goal.title}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => { if (await deleteGoal(goalId)) navigation.goBack(); },
+      },
+    ]);
+  };
 
   const handleContribute = async () => {
     const amt = Number(addAmount);
@@ -124,16 +91,13 @@ export default function GoalDetailScreen({ route, navigation }: any) {
       return;
     }
     setIsContributing(true);
-    const result = await contributeToGoal(goalId, amt, { source: 'manual' });
+    // Typed in the display currency; stored in the base currency
+    const result = await contributeToGoal(goalId, toBaseAmount(amt, currency, rates), { source: 'manual' });
     setIsContributing(false);
     setAddAmount('');
     setShowAddInput(false);
     if (result) {
-      Toast.show({
-        type: 'success',
-        text1: 'Added! 🎯',
-        text2: `${result.goal.percent}% saved toward ${goal.title}.`,
-      });
+      Toast.show({ type: 'success', text1: 'Added! 🎯', text2: `${result.goal.percent}% saved toward ${goal.title}.` });
       if (result.milestonesCrossed.length > 0) {
         setCelebration(Math.max(...result.milestonesCrossed));
         setTimeout(() => setCelebration(null), 2200);
@@ -142,538 +106,371 @@ export default function GoalDetailScreen({ route, navigation }: any) {
     }
   };
 
+  const quickAdds = [
+    { v: goal.requiredDaily, label: 'day' },
+    { v: goal.requiredWeekly, label: 'week' },
+    { v: goal.requiredMonthly, label: 'month' },
+  ].filter(q => q.v > 0).map(q => ({ ...q, v: Math.ceil(toDisplayAmount(q.v, currency, rates)) }));
+
   return (
-    <SafeAreaView
-      className={`flex-1 ${isDark ? 'bg-bgDark' : 'bg-bgLight'}`}
-      edges={['top', 'bottom']}
-    >
-      {/* ── Header ── */}
-      <View className="flex-row items-center justify-between px-5 pt-1 pb-2">
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          className={`w-9 h-9 rounded-full items-center justify-center ${isDark ? 'bg-cardDark' : 'bg-white'}`}
-          style={{ shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 }}
-        >
-          <Ionicons name="chevron-back" size={20} color={isDark ? '#EDEAE1' : '#211C13'} />
-        </TouchableOpacity>
-
-        <Text
-          className={`flex-1 text-center text-[17px] font-bold mx-3 ${isDark ? 'text-textDark' : 'text-textLight'}`}
-          numberOfLines={1}
-        >
-          {goal.title}
-        </Text>
-
-        <TouchableOpacity
-          onPress={handleDeleteGoal}
-          className={`w-9 h-9 rounded-full items-center justify-center ${isDark ? 'bg-cardDark' : 'bg-white'}`}
-          style={{ shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 }}
-        >
-          <Ionicons name="trash-outline" size={18} color="#F43F5E" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 48 }}
-        showsVerticalScrollIndicator={false}
-      >
-
-        {/* ── Hero + Ring fused block ── */}
-        <View className="mx-4">
-          {/* Hero image */}
-          <View style={{ height: 210, borderRadius: 24, overflow: 'hidden' }}>
-            {goal.imageUrl ? (
-              <Image source={{ uri: goal.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            ) : (
-              <LinearGradient
-                colors={isDark ? ['#3a3226', '#1d1710'] : ['#EDE3CE', '#D8C89A']}
-                style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
-              >
-                <Text style={{ fontSize: 60 }}>{goal.emoji}</Text>
-              </LinearGradient>
-            )}
-            {/* Scrim for ring readability */}
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.55)']}
-              style={[StyleSheet.absoluteFill]}
-              start={{ x: 0, y: 0.4 }}
-              end={{ x: 0, y: 1 }}
-            />
-            {/* Target label bottom-left */}
-            <View style={{ position: 'absolute', bottom: 14, left: 16 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' }}>
-                Goal
-              </Text>
-              <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '800' }}>
-                {formatCurrency(goal.targetAmount, currency, enableConversion ? exchangeRates : null)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Ring card — sits below hero, slightly overlapping */}
-          <View
-            style={{
-              marginTop: -32,
-              borderRadius: 24,
-              padding: 20,
-              backgroundColor: surfaceBg,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: isDark ? 0.3 : 0.1,
-              shadowRadius: 20,
-              elevation: 8,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
-              {/* Ring */}
-              <View style={{ width: 160, height: 160, alignItems: 'center', justifyContent: 'center' }}>
-                <Svg width={160} height={160} viewBox="0 0 160 160">
-                  <Defs>
-                    <SvgGradient id="ringGradDetail" x1="0" y1="0" x2="1" y2="1">
-                      <Stop offset="0%" stopColor={GOLD} />
-                      <Stop offset="100%" stopColor={EMERALD} />
-                    </SvgGradient>
-                  </Defs>
-                  {/* Track */}
-                  <Circle cx="80" cy="80" r={RING_RADIUS} stroke={ringTrack} strokeWidth="14" fill="none" />
-                  {/* Progress */}
-                  <Circle
-                    cx="80" cy="80" r={RING_RADIUS}
-                    stroke="url(#ringGradDetail)" strokeWidth="14" fill="none"
-                    strokeDasharray={RING_CIRCUMFERENCE}
-                    strokeDashoffset={dashOffset}
-                    strokeLinecap="round"
-                    rotation="-90" origin="80,80"
-                  />
-                </Svg>
-                <View style={{ position: 'absolute', alignItems: 'center' }}>
-                  <Text style={{
-                    fontSize: 34, fontWeight: '900',
-                    color: isDark ? '#EDEAE1' : '#211C13',
-                    letterSpacing: -1,
-                  }}>
-                    {pct}%
-                  </Text>
-                  <Text style={{
-                    fontSize: 11, fontWeight: '700', textTransform: 'uppercase',
-                    letterSpacing: 1, color: isDark ? '#9A98A6' : '#726A57', marginTop: 2,
-                  }}>
-                    saved
-                  </Text>
-                </View>
-              </View>
-
-              {/* Stats column */}
-              <View style={{ flex: 1, gap: 14 }}>
-                <View>
-                  <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: EMERALD, marginBottom: 3 }}>
-                    Saved
-                  </Text>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: isDark ? '#EDEAE1' : '#211C13' }}>
-                    {formatCurrency(goal.savedAmount, currency, enableConversion ? exchangeRates : null)}
-                  </Text>
-                </View>
-                <View style={{ height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)' }} />
-                <View>
-                  <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: isDark ? '#9A98A6' : '#B8A882', marginBottom: 3 }}>
-                    Still need
-                  </Text>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: isDark ? '#EDEAE1' : '#211C13' }}>
-                    {formatCurrency(remaining, currency, enableConversion ? exchangeRates : null)}
-                  </Text>
-                </View>
-                {goal.deadline && (
-                  <>
-                    <View style={{ height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)' }} />
-                    <View>
-                      <Text style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, color: GOLD, marginBottom: 3 }}>
-                        Deadline
-                      </Text>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? '#EDEAE1' : '#211C13' }}>
-                        {new Date(goal.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </Text>
-                    </View>
-                  </>
-                )}
-              </View>
-            </View>
-
-            {/* Mini progress bar */}
-            <View style={{ marginTop: 18, height: 6, borderRadius: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-              <LinearGradient
-                colors={[GOLD, EMERALD]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={{ height: '100%', width: `${Math.min(100, pct)}%`, borderRadius: 3 }}
-              />
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 }}>
-              <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#9A98A6' : '#A09070' }}>0%</Text>
-              <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#9A98A6' : '#A09070' }}>100%</Text>
-            </View>
-          </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.bg }]} edges={['top']}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <IconButton icon="chevron-back" onPress={() => navigation.goBack()} />
+          <Text style={[styles.headerTitle, { color: c.text }]} numberOfLines={1}>{goal.title}</Text>
+          <IconButton icon="trash-outline" color={brand.expense} onPress={handleDeleteGoal} />
         </View>
 
-        {/* ── AI Coach ── */}
-        {!!coachLine && (
-          <View style={{ marginHorizontal: 16, marginTop: 14 }}>
-            <LinearGradient
-              colors={isDark ? ['rgba(212,178,106,0.12)', 'rgba(72,199,154,0.08)'] : ['rgba(212,178,106,0.15)', 'rgba(72,199,154,0.08)']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{
-                borderRadius: 20,
-                padding: 18,
-                borderWidth: 1,
-                borderColor: 'rgba(212,178,106,0.3)',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <LinearGradient
-                  colors={[GOLD, EMERALD]}
-                  style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Ionicons name="sparkles" size={14} color="#FFF" />
+        <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/* Hero */}
+          <View style={styles.px}>
+            <View style={styles.hero}>
+              {goal.imageUrl ? (
+                <Image source={{ uri: goal.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              ) : (
+                <LinearGradient colors={isDark ? ['#3A2E22', '#1A1510'] : ['#FFE7D6', '#FFD0B5']} style={[StyleSheet.absoluteFill, styles.center]}>
+                  <Text style={{ fontSize: 72 }}>{goal.emoji}</Text>
                 </LinearGradient>
-                <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: GOLD }}>
-                  AI Coach
-                </Text>
+              )}
+              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} start={{ x: 0, y: 0.4 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
+              <View style={styles.heroBottom}>
+                <Text style={styles.heroLabel}>TARGET</Text>
+                <Text style={styles.heroTarget}>{fmt(goal.targetAmount)}</Text>
               </View>
-              <Text style={{
-                fontSize: 15, fontStyle: 'italic', fontWeight: '600', lineHeight: 22,
-                color: isDark ? '#EDEAE1' : '#3a2f1e',
-              }}>
-                "{coachLine}"
-              </Text>
-            </LinearGradient>
-          </View>
-        )}
-
-        {/* ── Add to goal CTA ── */}
-        <View style={{ marginHorizontal: 16, marginTop: 14 }}>
-          {showAddInput ? (
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              <View
-                style={{
-                  backgroundColor: surfaceBg,
-                  borderRadius: 20,
-                  padding: 16,
-                  borderWidth: 1,
-                  borderColor: glassBorder,
-                  flexDirection: 'row',
-                  gap: 10,
-                  alignItems: 'center',
-                  shadowColor: '#000',
-                  shadowOpacity: 0.06,
-                  shadowRadius: 12,
-                  elevation: 3,
-                }}
-              >
-                <TextInput
-                  value={addAmount}
-                  onChangeText={setAddAmount}
-                  placeholder="Amount"
-                  placeholderTextColor={isDark ? '#9A98A6' : '#B0A485'}
-                  keyboardType="decimal-pad"
-                  autoFocus
-                  style={{
-                    flex: 1,
-                    fontSize: 22,
-                    fontWeight: '800',
-                    color: isDark ? '#EDEAE1' : '#211C13',
-                    padding: 0,
-                  }}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowAddInput(false)}
-                  style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }}
-                >
-                  <Ionicons name="close" size={18} color={isDark ? '#9A98A6' : '#726A57'} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleContribute}
-                  disabled={isContributing}
-                  style={{ borderRadius: 16, overflow: 'hidden' }}
-                >
-                  <LinearGradient
-                    colors={[GOLD, EMERALD]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                    style={{ paddingHorizontal: 20, height: 44, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {isContributing
-                      ? <ActivityIndicator color="#FFF" size="small" />
-                      : <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>Add</Text>
-                    }
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          ) : (
-            <TouchableOpacity
-              onPress={() => setShowAddInput(true)}
-              activeOpacity={0.85}
-              style={{ borderRadius: 20, overflow: 'hidden' }}
-            >
-              <LinearGradient
-                colors={[GOLD, EMERALD]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18, borderRadius: 20 }}
-              >
-                <Ionicons name="add-circle" size={22} color="#FFF" />
-                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '800' }}>Add to this goal</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Streak card — PREMIUM redesign ── */}
-        {streak && streak.currentStreak > 0 && (
-          <View style={{ marginHorizontal: 16, marginTop: 14 }}>
-            <LinearGradient
-              colors={isDark
-                ? ['#2D1810', '#1A0F08']
-                : ['#FFF5ED', '#FFEDE0']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{
-                borderRadius: 24,
-                padding: 20,
-                borderWidth: 1.5,
-                borderColor: isDark ? 'rgba(255,107,53,0.35)' : 'rgba(255,107,53,0.25)',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                {/* Animated fire */}
-                <Animated.View style={[fireAnimStyle, {
-                  width: 60, height: 60, borderRadius: 30,
-                  backgroundColor: isDark ? 'rgba(255,107,53,0.2)' : 'rgba(255,107,53,0.15)',
-                  alignItems: 'center', justifyContent: 'center',
-                }]}>
-                  <Text style={{ fontSize: 30 }}>🔥</Text>
-                </Animated.View>
-
-                {/* Streak info */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{
-                    fontSize: 28, fontWeight: '900', letterSpacing: -0.5,
-                    color: FIRE_RED,
-                  }}>
-                    {streak.currentStreak}
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? '#EDEAE1' : '#3A1F0A' }}>
-                      {' '}day{streak.currentStreak !== 1 ? 's' : ''}
-                    </Text>
-                  </Text>
-                  <Text style={{
-                    fontSize: 13, fontWeight: '700', textTransform: 'uppercase',
-                    letterSpacing: 0.8, color: FIRE_RED, marginTop: 1,
-                  }}>
-                    🏆 Saving streak
-                  </Text>
+              {daysLeft !== null && (
+                <View style={styles.heroPill}>
+                  <Ionicons name="time" size={12} color="#FFF" />
+                  <Text style={styles.heroPillText}>{daysLeft} days left</Text>
                 </View>
+              )}
+            </View>
 
-                {/* Best badge */}
-                <View style={{
-                  backgroundColor: isDark ? 'rgba(255,107,53,0.2)' : 'rgba(255,107,53,0.12)',
-                  borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8,
-                  alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#FF9A6C' : FIRE_RED, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Best
-                  </Text>
-                  <Text style={{ fontSize: 20, fontWeight: '900', color: isDark ? '#EDEAE1' : '#3A1F0A', letterSpacing: -0.5 }}>
-                    {streak.longestStreak}
-                  </Text>
-                  <Text style={{ fontSize: 10, fontWeight: '600', color: isDark ? '#9A98A6' : '#A0805A' }}>
-                    days
-                  </Text>
-                </View>
-              </View>
-
-              {/* Mini streak bar — last 7 days placeholder dots */}
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 16, alignItems: 'center' }}>
-                {Array.from({ length: 7 }).map((_, i) => {
-                  const active = i >= 7 - streak.currentStreak;
-                  return (
-                    <LinearGradient
-                      key={i}
-                      colors={active ? [FIRE_RED, GOLD] : ['transparent', 'transparent']}
-                      style={{
-                        flex: 1,
-                        height: 5,
-                        borderRadius: 3,
-                        backgroundColor: active ? undefined : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'),
-                      }}
+            {/* Progress card */}
+            <Animated.View entering={FadeInDown.duration(450)} style={[styles.progressCard, { backgroundColor: c.surface }, shadow(c, 2)]}>
+              <View style={styles.ringRow}>
+                <View style={styles.ringWrap}>
+                  <Svg width={140} height={140} viewBox="0 0 140 140">
+                    <Defs>
+                      <SvgGradient id="ringGradDetail" x1="0" y1="0" x2="1" y2="1">
+                        <Stop offset="0%" stopColor={brand.gold} />
+                        <Stop offset="100%" stopColor={brand.emerald} />
+                      </SvgGradient>
+                    </Defs>
+                    <Circle cx="70" cy="70" r={RING_RADIUS} stroke={c.surfaceAlt} strokeWidth="13" fill="none" />
+                    <Circle
+                      cx="70" cy="70" r={RING_RADIUS}
+                      stroke="url(#ringGradDetail)" strokeWidth="13" fill="none"
+                      strokeDasharray={RING_CIRC}
+                      strokeDashoffset={RING_CIRC * (1 - Math.min(100, pct) / 100)}
+                      strokeLinecap="round"
+                      rotation="-90" origin="70,70"
                     />
+                  </Svg>
+                  <View style={[StyleSheet.absoluteFill, styles.center]}>
+                    <Text style={[styles.ringPct, { color: c.text }]}>{pct}%</Text>
+                    <Text style={[styles.ringLabel, { color: c.textSecondary }]}>SAVED</Text>
+                  </View>
+                </View>
+
+                <View style={{ flex: 1, gap: 12 }}>
+                  <Stat label="Saved" value={fmt(goal.savedAmount)} color={brand.emerald} />
+                  <View style={[styles.divider, { backgroundColor: c.divider }]} />
+                  <Stat label="Still need" value={fmt(remaining)} color={c.textSecondary} />
+                  {goal.deadline && (
+                    <>
+                      <View style={[styles.divider, { backgroundColor: c.divider }]} />
+                      <Stat label="Deadline" small color={brand.gold}
+                        value={new Date(goal.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} />
+                    </>
+                  )}
+                </View>
+              </View>
+
+              {goal.requiredMonthly > 0 && (
+                <View style={[styles.paceRow, { backgroundColor: c.surfaceAlt }]}>
+                  {[
+                    { l: 'Daily', v: goal.requiredDaily },
+                    { l: 'Weekly', v: goal.requiredWeekly },
+                    { l: 'Monthly', v: goal.requiredMonthly },
+                  ].map((p, i) => (
+                    <React.Fragment key={p.l}>
+                      {i > 0 && <View style={[styles.paceDivider, { backgroundColor: c.border }]} />}
+                      <View style={styles.pace}>
+                        <Text style={[styles.paceValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>{fmt(p.v)}</Text>
+                        <Text style={[styles.paceLabel, { color: c.textSecondary }]}>{p.l}</Text>
+                      </View>
+                    </React.Fragment>
+                  ))}
+                </View>
+              )}
+            </Animated.View>
+          </View>
+
+          {/* AI coach */}
+          {!!coachLine && (
+            <View style={[styles.px, { marginTop: 14 }]}>
+              <View style={[styles.coach, { backgroundColor: isDark ? 'rgba(212,178,106,0.10)' : '#FFF8EC', borderColor: 'rgba(212,178,106,0.35)' }]}>
+                <View style={styles.coachHead}>
+                  <LinearGradient colors={GOAL_GRADIENT} style={styles.coachBadge}>
+                    <Ionicons name="sparkles" size={13} color="#FFF" />
+                  </LinearGradient>
+                  <Text style={styles.coachLabel}>AI COACH</Text>
+                </View>
+                <Text style={[styles.coachText, { color: c.text }]}>“{coachLine}”</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Streak */}
+          {streak && streak.currentStreak > 0 && (
+            <View style={[styles.px, { marginTop: 14 }]}>
+              <LinearGradient
+                colors={isDark ? ['#2D1810', '#1A0F08'] : ['#FFF3EA', '#FFE6D5']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={[styles.streak, { borderColor: 'rgba(255,107,53,0.3)' }]}
+              >
+                <Animated.View style={[styles.fire, fireStyle]}>
+                  <Text style={{ fontSize: 28 }}>🔥</Text>
+                </Animated.View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.streakCount}>
+                    {streak.currentStreak}
+                    <Text style={[styles.streakUnit, { color: c.text }]}> day{streak.currentStreak !== 1 ? 's' : ''}</Text>
+                  </Text>
+                  <Text style={styles.streakLabel}>SAVING STREAK</Text>
+                  <View style={styles.streakBars}>
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <View key={i} style={[styles.streakBar, { backgroundColor: i >= 7 - streak.currentStreak ? brand.fire : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)') }]} />
+                    ))}
+                  </View>
+                </View>
+                <View style={[styles.best, { backgroundColor: 'rgba(255,107,53,0.14)' }]}>
+                  <Text style={styles.bestLabel}>BEST</Text>
+                  <Text style={[styles.bestValue, { color: c.text }]}>{streak.longestStreak}</Text>
+                  <Text style={[styles.bestUnit, { color: c.textSecondary }]}>days</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
+
+          {/* Milestones */}
+          <View style={[styles.px, { marginTop: 14 }]}>
+            <View style={[styles.panel, { backgroundColor: c.surface }, shadow(c, 1)]}>
+              <View style={styles.panelHead}>
+                <Text style={[styles.panelTitle, { color: c.text }]}>Milestones</Text>
+                <Text style={[styles.panelMeta, { color: c.textSecondary }]}>{reachedCount}/{MILESTONES.length}</Text>
+              </View>
+              <View style={styles.milestones}>
+                <View style={[styles.milestoneLine, { backgroundColor: c.surfaceAlt }]} />
+                {MILESTONES.map((m, idx) => {
+                  const reached = goal.milestonesReached.includes(m) || pct >= m;
+                  const isNext = !reached && (idx === 0 || pct >= MILESTONES[idx - 1]);
+                  return (
+                    <View key={m} style={styles.milestone}>
+                      {reached ? (
+                        <LinearGradient colors={GOAL_GRADIENT} style={styles.milestoneDot}>
+                          <Ionicons name="checkmark" size={15} color="#FFF" />
+                        </LinearGradient>
+                      ) : (
+                        <View style={[styles.milestoneDot, {
+                          backgroundColor: isNext ? 'rgba(212,178,106,0.15)' : c.surfaceAlt,
+                          borderWidth: isNext ? 1.5 : 0, borderColor: brand.gold,
+                        }]}>
+                          {isNext && <View style={styles.nextDot} />}
+                        </View>
+                      )}
+                      <Text style={[styles.milestoneText, { color: reached ? c.text : c.textTertiary }]}>{m}%</Text>
+                    </View>
                   );
                 })}
               </View>
-              <Text style={{ fontSize: 10.5, fontWeight: '600', color: isDark ? '#9A98A6' : '#A0805A', marginTop: 5 }}>
-                Last 7 days
-              </Text>
-            </LinearGradient>
-          </View>
-        )}
-
-        {/* ── Milestones ── */}
-        <View style={{
-          marginHorizontal: 16, marginTop: 14,
-          backgroundColor: surfaceBg,
-          borderRadius: 24, padding: 20,
-          borderWidth: 1, borderColor: glassBorder,
-          shadowColor: '#000', shadowOpacity: isDark ? 0.15 : 0.05, shadowRadius: 12, elevation: 3,
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: GOLD }}>
-              Milestones
-            </Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#9A98A6' : '#A09070' }}>
-              {MILESTONES.filter(m => goal.percent >= m).length}/{MILESTONES.length}
-            </Text>
-          </View>
-
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-            {MILESTONES.map((m, idx) => {
-              const reached = goal.milestonesReached.includes(m) || goal.percent >= m;
-              const isNext = !reached && MILESTONES[idx - 1] !== undefined && (goal.percent >= (MILESTONES[idx - 1] ?? 0));
-              return (
-                <View key={m} style={{ alignItems: 'center', gap: 6, flex: 1 }}>
-                  {reached ? (
-                    <LinearGradient
-                      colors={[GOLD, EMERALD]}
-                      style={{
-                        width: 32, height: 32, borderRadius: 16,
-                        alignItems: 'center', justifyContent: 'center',
-                        shadowColor: GOLD, shadowOpacity: 0.4, shadowRadius: 6, elevation: 4,
-                      }}
-                    >
-                      <Ionicons name="checkmark" size={16} color="#FFF" />
-                    </LinearGradient>
-                  ) : (
-                    <View style={{
-                      width: 32, height: 32, borderRadius: 16,
-                      backgroundColor: isNext
-                        ? (isDark ? 'rgba(212,178,106,0.15)' : 'rgba(212,178,106,0.12)')
-                        : (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'),
-                      borderWidth: isNext ? 1.5 : 0,
-                      borderColor: isNext ? GOLD : 'transparent',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {isNext && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: GOLD, opacity: 0.5 }} />}
-                    </View>
-                  )}
-                  <Text style={{
-                    fontSize: 9, fontWeight: '700', letterSpacing: 0.3,
-                    color: reached ? (isDark ? '#EDEAE1' : '#211C13') : (isDark ? '#9A98A6' : '#B0A080'),
-                  }}>
-                    {m}%
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* ── Timeline ── */}
-        <View style={{
-          marginHorizontal: 16, marginTop: 14,
-          backgroundColor: surfaceBg,
-          borderRadius: 24, padding: 20,
-          borderWidth: 1, borderColor: glassBorder,
-          shadowColor: '#000', shadowOpacity: isDark ? 0.15 : 0.05, shadowRadius: 12, elevation: 3,
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: GOLD }}>
-              Timeline
-            </Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} />
-          </View>
-
-          {isLoadingTimeline ? (
-            <ActivityIndicator color={GOLD} style={{ marginVertical: 20 }} />
-          ) : timeline.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-              <Text style={{ fontSize: 32, marginBottom: 10 }}>📋</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: isDark ? '#9A98A6' : '#A09070', textAlign: 'center', lineHeight: 20 }}>
-                No contributions yet.{'\n'}Tap "Add to this goal" to begin.
-              </Text>
             </View>
+          </View>
+
+          {/* Timeline */}
+          <View style={[styles.px, { marginTop: 14 }]}>
+            <View style={[styles.panel, { backgroundColor: c.surface }, shadow(c, 1)]}>
+              <View style={styles.panelHead}>
+                <Text style={[styles.panelTitle, { color: c.text }]}>Contributions</Text>
+                <Text style={[styles.panelMeta, { color: c.textSecondary }]}>{timeline.length}</Text>
+              </View>
+              {isLoadingTimeline ? (
+                <ActivityIndicator color={brand.gold} style={{ marginVertical: 20 }} />
+              ) : timeline.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                  <Text style={{ fontSize: 30, marginBottom: 8 }}>🌱</Text>
+                  <Text style={[styles.emptyText, { color: c.textSecondary }]}>No contributions yet.{'\n'}Every journey starts with the first deposit.</Text>
+                </View>
+              ) : (
+                timeline.map((entry, i) => (
+                  <View key={entry._id} style={{ flexDirection: 'row', gap: 14 }}>
+                    <View style={{ alignItems: 'center', width: 14 }}>
+                      <LinearGradient colors={GOAL_GRADIENT} style={styles.tlDot} />
+                      {i < timeline.length - 1 && <View style={[styles.tlLine, { backgroundColor: c.surfaceAlt }]} />}
+                    </View>
+                    <View style={[styles.tlBody, i < timeline.length - 1 && { paddingBottom: 18 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tlAmount}>{entry.amount >= 0 ? '+' : ''}{fmt(entry.amount)}</Text>
+                        <Text style={[styles.tlDate, { color: c.textSecondary }]}>
+                          {new Date(entry.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Text>
+                      </View>
+                      <View style={[styles.tlTotal, { backgroundColor: 'rgba(72,199,154,0.12)' }]}>
+                        <Text style={styles.tlTotalText}>{fmt(entry.runningTotal)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Sticky add-money bar */}
+        <View style={[styles.bottomBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 14) }]}>
+          {showAddInput ? (
+            <Animated.View entering={FadeIn.duration(180)}>
+              {quickAdds.length > 0 && (
+                <View style={styles.quickRow}>
+                  {quickAdds.map(q => (
+                    <PressableScale key={q.label} onPress={() => setAddAmount(String(q.v))} style={[styles.quick, { borderColor: c.border }]}>
+                      <Text style={[styles.quickText, { color: c.text }]}>{symbol}{q.v}</Text>
+                      <Text style={[styles.quickSub, { color: c.textTertiary }]}>per {q.label}</Text>
+                    </PressableScale>
+                  ))}
+                </View>
+              )}
+              <View style={styles.addRow}>
+                <View style={[styles.addInput, { backgroundColor: c.surfaceAlt }]}>
+                  <Text style={[styles.addSymbol, { color: brand.gold }]}>{symbol}</Text>
+                  <TextInput
+                    value={addAmount}
+                    onChangeText={setAddAmount}
+                    placeholder="Amount"
+                    placeholderTextColor={c.textTertiary}
+                    keyboardType="decimal-pad"
+                    autoFocus
+                    selectionColor={brand.gold}
+                    style={[styles.addText, { color: c.text }]}
+                  />
+                </View>
+                <IconButton icon="close" tint={c.surfaceAlt} onPress={() => setShowAddInput(false)} />
+                <PrimaryButton title="Add" onPress={handleContribute} loading={isContributing} colors={GOAL_GRADIENT} />
+              </View>
+            </Animated.View>
           ) : (
-            <View>
-              {timeline.map((entry, i) => (
-                <View key={entry._id} style={{ flexDirection: 'row', gap: 14 }}>
-                  {/* Dot + line column */}
-                  <View style={{ alignItems: 'center', width: 16 }}>
-                    <LinearGradient
-                      colors={[GOLD, EMERALD]}
-                      style={{ width: 14, height: 14, borderRadius: 7, marginTop: 3 }}
-                    />
-                    {i < timeline.length - 1 && (
-                      <View style={{ flex: 1, width: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', marginTop: 4, marginBottom: 0 }} />
-                    )}
-                  </View>
-                  {/* Content */}
-                  <View style={{ flex: 1, paddingBottom: i < timeline.length - 1 ? 18 : 0 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: EMERALD }}>
-                      {entry.amount >= 0 ? '+' : ''}{formatCurrency(entry.amount, currency, enableConversion ? exchangeRates : null)}
-                    </Text>
-                    <Text style={{ fontSize: 11.5, marginTop: 2, color: isDark ? '#9A98A6' : '#A09070', fontWeight: '600' }}>
-                      {new Date(entry.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </Text>
-                    <View style={{
-                      marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 6,
-                      backgroundColor: isDark ? 'rgba(72,199,154,0.1)' : 'rgba(72,199,154,0.1)',
-                      alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
-                    }}>
-                      <Text style={{ fontSize: 10.5, fontWeight: '700', color: EMERALD }}>
-                        Total: {formatCurrency(entry.runningTotal, currency, enableConversion ? exchangeRates : null)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
+            <PrimaryButton title="Add money to this goal" icon="add-circle" onPress={() => setShowAddInput(true)} colors={GOAL_GRADIENT} />
           )}
         </View>
+      </KeyboardAvoidingView>
 
-      </ScrollView>
-
-      {/* ── Milestone celebration overlay ── */}
+      {/* Milestone celebration */}
       {celebration !== null && (
-        <Animated.View
-          entering={FadeIn}
-          exiting={FadeOut}
-          style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }]}
-          pointerEvents="none"
-        >
-          <Animated.View
-            entering={ZoomIn.springify().damping(12)}
-            style={{
-              width: 280,
-              borderRadius: 28,
-              overflow: 'hidden',
-              backgroundColor: surfaceBg,
-              shadowColor: GOLD,
-              shadowOpacity: 0.3,
-              shadowRadius: 30,
-              elevation: 20,
-            }}
-          >
-            <LinearGradient
-              colors={[GOLD, EMERALD]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={{ paddingVertical: 32, alignItems: 'center' }}
-            >
-              <Text style={{ fontSize: 52 }}>🎉</Text>
-              <Text style={{ fontSize: 26, fontWeight: '900', color: '#FFF', marginTop: 10, letterSpacing: -0.5 }}>
-                {celebration}% Reached!
-              </Text>
+        <Animated.View entering={FadeIn} exiting={FadeOut} pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.center, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+          <Animated.View entering={ZoomIn.springify().damping(12)} style={[styles.celebrate, { backgroundColor: c.surface }]}>
+            <LinearGradient colors={GOAL_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.celebrateTop}>
+              <Text style={{ fontSize: 54 }}>🎉</Text>
+              <Text style={styles.celebrateTitle}>{celebration}% reached!</Text>
             </LinearGradient>
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: isDark ? '#9A98A6' : '#726A57', textAlign: 'center', lineHeight: 21 }}>
-                {goal.title} is getting closer — keep the momentum going! 🚀
-              </Text>
-            </View>
+            <Text style={[styles.celebrateBody, { color: c.textSecondary }]}>
+              {goal.title} is getting closer — keep the momentum going! 🚀
+            </Text>
           </Animated.View>
         </Animated.View>
       )}
     </SafeAreaView>
   );
 }
+
+function Stat({ label, value, color, small }: { label: string; value: string; color: string; small?: boolean }) {
+  const { c } = useTheme();
+  return (
+    <View>
+      <Text style={[styles.statLabel, { color }]}>{label.toUpperCase()}</Text>
+      <Text style={[styles.statValue, { color: c.text, fontSize: small ? 14.5 : 19 }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  px: { paddingHorizontal: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '800' },
+
+  hero: { height: 220, borderRadius: 26, overflow: 'hidden' },
+  heroBottom: { position: 'absolute', left: 18, bottom: 46 },
+  heroLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  heroTarget: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.6 },
+  heroPill: { position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
+  heroPillText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+
+  progressCard: { marginTop: -34, marginHorizontal: 8, borderRadius: 24, padding: 18 },
+  ringRow: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  ringWrap: { width: 140, height: 140 },
+  ringPct: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
+  ringLabel: { fontSize: 10.5, fontWeight: '800', letterSpacing: 1.2, marginTop: 1 },
+  divider: { height: StyleSheet.hairlineWidth },
+  statLabel: { fontSize: 10.5, fontWeight: '900', letterSpacing: 0.9, marginBottom: 2 },
+  statValue: { fontWeight: '900', letterSpacing: -0.3 },
+  paceRow: { flexDirection: 'row', borderRadius: 16, paddingVertical: 12, marginTop: 16 },
+  pace: { flex: 1, alignItems: 'center', paddingHorizontal: 6 },
+  paceValue: { fontSize: 14.5, fontWeight: '900' },
+  paceLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+  paceDivider: { width: 1 },
+
+  coach: { borderRadius: 20, padding: 16, borderWidth: 1 },
+  coachHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  coachBadge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  coachLabel: { color: brand.gold, fontSize: 11, fontWeight: '900', letterSpacing: 1.2 },
+  coachText: { fontSize: 15, fontStyle: 'italic', fontWeight: '600', lineHeight: 22 },
+
+  streak: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 22, padding: 16, borderWidth: 1.5 },
+  fire: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(255,107,53,0.18)', alignItems: 'center', justifyContent: 'center' },
+  streakCount: { color: brand.fire, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+  streakUnit: { fontSize: 15, fontWeight: '800' },
+  streakLabel: { color: brand.fire, fontSize: 10.5, fontWeight: '900', letterSpacing: 1 },
+  streakBars: { flexDirection: 'row', gap: 4, marginTop: 9 },
+  streakBar: { flex: 1, height: 5, borderRadius: 3 },
+  best: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' },
+  bestLabel: { color: brand.fire, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  bestValue: { fontSize: 20, fontWeight: '900' },
+  bestUnit: { fontSize: 10, fontWeight: '700' },
+
+  panel: { borderRadius: 22, padding: 18 },
+  panelHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  panelTitle: { fontSize: 16, fontWeight: '900' },
+  panelMeta: { fontSize: 13, fontWeight: '800' },
+  milestones: { flexDirection: 'row', justifyContent: 'space-between' },
+  milestoneLine: { position: 'absolute', left: 16, right: 16, top: 15, height: 3, borderRadius: 2 },
+  milestone: { alignItems: 'center', gap: 6, flex: 1 },
+  milestoneDot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  nextDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: brand.gold },
+  milestoneText: { fontSize: 10.5, fontWeight: '800' },
+
+  emptyText: { fontSize: 13.5, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
+  tlDot: { width: 14, height: 14, borderRadius: 7, marginTop: 4 },
+  tlLine: { flex: 1, width: 2, marginTop: 4 },
+  tlBody: { flex: 1, flexDirection: 'row', alignItems: 'flex-start' },
+  tlAmount: { color: brand.emerald, fontSize: 16, fontWeight: '900' },
+  tlDate: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  tlTotal: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4 },
+  tlTotalText: { color: brand.emerald, fontSize: 11.5, fontWeight: '800' },
+
+  bottomBar: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  quickRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  quick: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 8, alignItems: 'center' },
+  quickText: { fontSize: 14, fontWeight: '900' },
+  quickSub: { fontSize: 10.5, fontWeight: '700', marginTop: 1 },
+  addRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  addInput: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.md, paddingHorizontal: 14, height: 54 },
+  addSymbol: { fontSize: 20, fontWeight: '900' },
+  addText: { flex: 1, fontSize: 20, fontWeight: '900', paddingVertical: 0 },
+
+  celebrate: { width: 290, borderRadius: 28, overflow: 'hidden' },
+  celebrateTop: { paddingVertical: 30, alignItems: 'center' },
+  celebrateTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', marginTop: 8, letterSpacing: -0.5 },
+  celebrateBody: { fontSize: 15, fontWeight: '600', textAlign: 'center', lineHeight: 21, padding: 20 },
+});

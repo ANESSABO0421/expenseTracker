@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColorScheme } from 'nativewind';
+import { useTheme, brand } from '../theme';
 import { useStore } from '../store/useStore';
 
 /**
@@ -12,9 +12,8 @@ import { useStore } from '../store/useStore';
  */
 export default function ServerWakingBanner() {
   const isServerWaking = useStore(state => state.isServerWaking);
-  const { colorScheme } = useColorScheme();
+  const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const isDark = colorScheme === 'dark';
 
   if (!isServerWaking) return null;
 
@@ -25,13 +24,13 @@ export default function ServerWakingBanner() {
       pointerEvents="none"
       style={[styles.wrap, { top: insets.top + 6 }]}
     >
-      <View style={[styles.pill, { backgroundColor: isDark ? '#1C2030' : '#FFFFFF' }]}>
-        <ActivityIndicator size="small" color="#D4B26A" />
+      <View style={[styles.pill, { backgroundColor: c.elevated, borderColor: c.border }]}>
+        <ActivityIndicator size="small" color={brand.primary} />
         <View style={{ flexShrink: 1 }}>
-          <Text style={[styles.title, { color: isDark ? '#EDEAE1' : '#211C13' }]}>
+          <Text style={[styles.title, { color: c.text }]}>
             Waking up the server…
           </Text>
-          <Text style={[styles.sub, { color: isDark ? '#9A98A6' : '#726A57' }]}>
+          <Text style={[styles.sub, { color: c.textSecondary }]}>
             The first load after a break takes ~30s
           </Text>
         </View>
@@ -55,6 +54,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
     maxWidth: '90%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },

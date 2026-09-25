@@ -5,9 +5,12 @@ import AppNavigator from './src/navigation/AppNavigator';
 import ServerWakingBanner from './src/components/ServerWakingBanner';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { toastConfig } from './src/components/ToastConfig';
 import { useStore } from './src/store/useStore';
 import { warmBackend } from './src/utils/api';
 import { Platform, UIManager } from 'react-native';
+import { useColorScheme } from 'nativewind';
+import ThemeTransitionProvider from './src/theme/ThemeTransition';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -22,6 +25,8 @@ export default function App() {
   const [sessionRestored, setSessionRestored] = useState(false);
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
   const { restoreSession } = useStore();
+  const storeTheme = useStore(s => s.theme);
+  const { colorScheme, setColorScheme } = useColorScheme();
 
   useEffect(() => {
     // Kick Render awake immediately. Deliberately not awaited — the splash and
@@ -32,6 +37,8 @@ export default function App() {
     (async () => {
       try {
         await restoreSession();
+        // Apply the saved (or device) theme before the first app frame
+        setColorScheme(useStore.getState().theme);
       } finally {
         setSessionRestored(true);
       }
@@ -46,7 +53,7 @@ export default function App() {
   if (!showApp) {
     return (
       <>
-        <StatusBar style="light" />
+        <StatusBar style={storeTheme === 'dark' ? 'light' : 'dark'} />
         <Preloader ready={isReady} onFinish={() => setShowApp(true)} />
       </>
     );
@@ -56,10 +63,12 @@ export default function App() {
     // SafeAreaProvider is needed here because the banner sits outside
     // NavigationContainer, which otherwise supplies its own compat provider.
     <SafeAreaProvider>
-      <StatusBar style="light" />
-      <AppNavigator />
-      <ServerWakingBanner />
-      <Toast />
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} animated />
+      <ThemeTransitionProvider>
+        <AppNavigator />
+        <ServerWakingBanner />
+        <Toast config={toastConfig} topOffset={56} />
+      </ThemeTransitionProvider>
     </SafeAreaProvider>
   );
 }

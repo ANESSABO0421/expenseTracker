@@ -1,145 +1,168 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useMemo, useRef } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useColorScheme } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore, Transaction } from '../store/useStore';
 import { formatCurrency } from '../utils/formatCurrency';
+import { useTheme, brand, radius, shadow } from '../theme';
+import { ScreenTitle, Card, TransactionRow, EmptyState, PressableScale } from '../components/ui';
+
+// Local YYYY-MM-DD (toISOString would shift late-evening entries to the next day)
+const localKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export default function CalendarScreen({ navigation }: any) {
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { c, isDark } = useTheme();
   const { transactions, currency, exchangeRates, enableConversion } = useStore();
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const rates = enableConversion ? exchangeRates : null;
+  const todayKey = localKey(new Date());
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
+  const [selectedDate, setSelectedDate] = useState<string>(todayKey);
+  const [visibleMonth, setVisibleMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1 }; });
 
-  const bg = isDark ? '#000000' : '#F2F2F7';
-  const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
-  const textPrimary = isDark ? '#FFFFFF' : '#1C1C1E';
-  const textSecondary = isDark ? '#8E8E93' : '#6C6C70';
-  const separator = isDark ? '#2C2C2E' : '#E5E5EA';
-
-  const { markedDates, dayTransactions, dailyTotals } = useMemo(() => {
+  const { markedDates, dayTx, dayTotals, monthTotals } = useMemo(() => {
     const marks: Record<string, any> = {};
-    const dayTxMap: Record<string, Transaction[]> = {};
-    const totalsMap: Record<string, { income: number; expense: number }> = {};
+    const txMap: Record<string, Transaction[]> = {};
+    const totals: Record<string, { income: number; expense: number }> = {};
+    const month = { income: 0, expense: 0 };
 
     transactions.forEach(t => {
-      const dateStr = new Date(t.date).toISOString().split('T')[0];
-      if (!dayTxMap[dateStr]) {
-        dayTxMap[dateStr] = [];
-        totalsMap[dateStr] = { income: 0, expense: 0 };
-        marks[dateStr] = { dots: [] };
+      const d = new Date(t.date);
+      const key = localKey(d);
+      (txMap[key] ||= []).push(t);
+      const tot = (totals[key] ||= { income: 0, expense: 0 });
+      if (t.type === 'income') tot.income += t.amount; else tot.expense += t.amount;
+      if (d.getFullYear() === visibleMonth.y && d.getMonth() + 1 === visibleMonth.m) {
+        if (t.type === 'income') month.income += t.amount; else month.expense += t.amount;
       }
-      dayTxMap[dateStr].push(t);
-      if (t.type === 'income') totalsMap[dateStr].income += t.amount;
-      else totalsMap[dateStr].expense += t.amount;
     });
 
-    Object.keys(totalsMap).forEach(dateStr => {
+    Object.keys(totals).forEach(key => {
       const dots = [];
-      if (totalsMap[dateStr].income > 0) dots.push({ key: 'income', color: '#34C759' });
-      if (totalsMap[dateStr].expense > 0) dots.push({ key: 'expense', color: '#FF3B30' });
-      marks[dateStr] = { dots, selected: dateStr === selectedDate, selectedColor: '#007AFF' };
+      if (totals[key].income > 0) dots.push({ key: 'income', color: brand.income, selectedDotColor: '#FFF' });
+      if (totals[key].expense > 0) dots.push({ key: 'expense', color: brand.primary, selectedDotColor: '#FFF' });
+      marks[key] = { dots };
     });
+    marks[selectedDate] = { ...(marks[selectedDate] || {}), selected: true, selectedColor: brand.primary };
 
-    if (!marks[selectedDate]) {
-      marks[selectedDate] = { selected: true, selectedColor: '#007AFF' };
-    } else {
-      marks[selectedDate].selected = true;
-      marks[selectedDate].selectedColor = '#007AFF';
-    }
+    return { markedDates: marks, dayTx: txMap, dayTotals: totals, monthTotals: month };
+  }, [transactions, selectedDate, visibleMonth]);
 
-    return { markedDates: marks, dayTransactions: dayTxMap, dailyTotals: totalsMap };
-  }, [transactions, selectedDate]);
-
-  const currentDayTxs = dayTransactions[selectedDate] || [];
-  const currentTotals = dailyTotals[selectedDate] || { income: 0, expense: 0 };
+  const currentTx = dayTx[selectedDate] || [];
+  const current = dayTotals[selectedDate] || { income: 0, expense: 0 };
+  const monthName = new Date(visibleMonth.y, visibleMonth.m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: bg }]} edges={['top']}>
-      <View style={[styles.header, { borderBottomColor: separator }]}>
-        <Text style={[styles.headerTitle, { color: textPrimary }]}>Calendar</Text>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: c.bg }]} edges={['top']}>
+      <ScreenTitle
+        title="Calendar"
+        subtitle={monthName}
+        right={selectedDate !== todayKey ? (
+          <PressableScale onPress={() => setSelectedDate(todayKey)} style={[styles.todayBtn, { backgroundColor: c.primarySoft }]}>
+            <Text style={styles.todayText}>Today</Text>
+          </PressableScale>
+        ) : undefined}
+      />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Calendar */}
-        <View style={[styles.card, { backgroundColor: cardBg }]}>
-          <Calendar
-            key={isDark ? 'dark' : 'light'}
-            current={selectedDate}
-            onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
-            markingType="multi-dot"
-            markedDates={markedDates}
-            theme={{
-              calendarBackground: cardBg,
-              textSectionTitleColor: textSecondary,
-              selectedDayBackgroundColor: '#007AFF',
-              selectedDayTextColor: '#ffffff',
-              todayTextColor: '#007AFF',
-              dayTextColor: textPrimary,
-              textDisabledColor: isDark ? '#3A3A3C' : '#D1D1D6',
-              monthTextColor: textPrimary,
-              arrowColor: '#007AFF',
-            }}
-          />
-        </View>
-
-        {/* Daily Summary */}
-        <View style={styles.summaryRow}>
-          <View style={[styles.summaryCard, { backgroundColor: cardBg }]}>
-            <View style={[styles.summaryDot, { backgroundColor: 'rgba(52, 199, 89, 0.12)' }]}>
-              <Ionicons name="arrow-down" size={14} color="#34C759" />
-            </View>
-            <Text style={[styles.summaryLabel, { color: textSecondary }]}>Income</Text>
-            <Text style={[styles.summaryValue, { color: '#34C759' }]}>
-              {formatCurrency(currentTotals.income, currency, enableConversion ? exchangeRates : null)}
-            </Text>
-          </View>
-          <View style={[styles.summaryCard, { backgroundColor: cardBg }]}>
-            <View style={[styles.summaryDot, { backgroundColor: 'rgba(255, 59, 48, 0.12)' }]}>
-              <Ionicons name="arrow-up" size={14} color="#FF3B30" />
-            </View>
-            <Text style={[styles.summaryLabel, { color: textSecondary }]}>Expense</Text>
-            <Text style={[styles.summaryValue, { color: '#FF3B30' }]}>
-              {formatCurrency(currentTotals.expense, currency, enableConversion ? exchangeRates : null)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Transactions for Selected Day */}
-        <Text style={[styles.dayTitle, { color: textPrimary }]}>
-          {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </Text>
-
-        {currentDayTxs.length === 0 ? (
-          <View style={[styles.card, { backgroundColor: cardBg, alignItems: 'center', paddingVertical: 36 }]}>
-            <Ionicons name="calendar-outline" size={32} color={textSecondary} />
-            <Text style={[styles.emptyText, { color: textSecondary }]}>No transactions on this day</Text>
-          </View>
-        ) : (
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
-            {currentDayTxs.map((item, i) => (
-              <TouchableOpacity
-                key={item._id}
-                style={[styles.txRow, { borderBottomColor: separator, borderBottomWidth: i < currentDayTxs.length - 1 ? StyleSheet.hairlineWidth : 0 }]}
-                onPress={() => navigation.navigate('TransactionDetails', { transaction: item })}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.txIcon, { backgroundColor: item.type === 'income' ? 'rgba(52, 199, 89, 0.12)' : 'rgba(255, 59, 48, 0.12)' }]}>
-                  <Ionicons name={item.type === 'income' ? 'arrow-down' : 'arrow-up'} size={16} color={item.type === 'income' ? '#34C759' : '#FF3B30'} />
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 130 }}>
+        <View style={styles.px}>
+          <Card padded={false} style={{ overflow: 'hidden', paddingBottom: 6 }}>
+            <Calendar
+              key={isDark ? 'dark' : 'light'}
+              current={selectedDate}
+              onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
+              onMonthChange={(m: DateData) => setVisibleMonth({ y: m.year, m: m.month })}
+              markingType="multi-dot"
+              markedDates={markedDates}
+              enableSwipeMonths
+              renderArrow={(dir: 'left' | 'right') => (
+                <View style={[styles.arrow, { backgroundColor: c.surfaceAlt }]}>
+                  <Ionicons name={dir === 'left' ? 'chevron-back' : 'chevron-forward'} size={16} color={c.text} />
                 </View>
-                <View style={styles.txInfo}>
-                  <Text style={[styles.txCategory, { color: textPrimary }]}>{item.category}</Text>
-                  {item.description ? <Text style={[styles.txDesc, { color: textSecondary }]}>{item.description}</Text> : null}
-                </View>
-                <Text style={[styles.txAmount, { color: item.type === 'income' ? '#34C759' : textPrimary }]}>
-                  {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount, currency, enableConversion ? exchangeRates : null)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+              )}
+              theme={{
+                calendarBackground: c.surface,
+                textSectionTitleColor: c.textTertiary,
+                selectedDayBackgroundColor: brand.primary,
+                selectedDayTextColor: '#FFFFFF',
+                todayTextColor: brand.primary,
+                dayTextColor: c.text,
+                textDisabledColor: c.textTertiary,
+                monthTextColor: c.text,
+                arrowColor: brand.primary,
+                textDayFontWeight: '600',
+                textMonthFontWeight: '900',
+                textDayHeaderFontWeight: '700',
+                textMonthFontSize: 17,
+                textDayFontSize: 15,
+                textDayHeaderFontSize: 12,
+              }}
+            />
+          </Card>
+
+          {/* Month summary */}
+          <View style={[styles.monthStrip, { backgroundColor: c.surface }, shadow(c, 1)]}>
+            <View style={styles.monthCell}>
+              <Text style={[styles.monthLabel, { color: c.textSecondary }]}>Earned this month</Text>
+              <Text style={[styles.monthValue, { color: brand.income }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrency(monthTotals.income, currency, rates)}
+              </Text>
+            </View>
+            <View style={[styles.monthDivider, { backgroundColor: c.divider }]} />
+            <View style={styles.monthCell}>
+              <Text style={[styles.monthLabel, { color: c.textSecondary }]}>Spent this month</Text>
+              <Text style={[styles.monthValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrency(monthTotals.expense, currency, rates)}
+              </Text>
+            </View>
           </View>
-        )}
+
+          {/* Selected day */}
+          <View style={styles.dayHead}>
+            <Text style={[styles.dayTitle, { color: c.text }]}>
+              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </Text>
+            <View style={styles.dayChips}>
+              {current.income > 0 && (
+                <View style={[styles.dayChip, { backgroundColor: c.incomeSoft }]}>
+                  <Text style={[styles.dayChipText, { color: brand.income }]}>+{formatCurrency(current.income, currency, rates)}</Text>
+                </View>
+              )}
+              {current.expense > 0 && (
+                <View style={[styles.dayChip, { backgroundColor: c.primarySoft }]}>
+                  <Text style={[styles.dayChipText, { color: brand.primary }]}>−{formatCurrency(current.expense, currency, rates)}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <Card padded={false} style={{ overflow: 'hidden' }}>
+            {currentTx.length === 0 ? (
+              <EmptyState
+                icon="calendar-outline"
+                title="A quiet day"
+                message="No transactions on this date."
+                action="Add one"
+                onAction={() => navigation.navigate('AddTransaction')}
+                compact
+              />
+            ) : (
+              currentTx.map((t, i) => (
+                <TransactionRow
+                  key={t._id}
+                  t={t}
+                  currency={currency}
+                  rates={rates}
+                  last={i === currentTx.length - 1}
+                  onPress={() => navigation.navigate('TransactionDetails', { transaction: t })}
+                />
+              ))
+            )}
+          </Card>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -147,20 +170,18 @@ export default function CalendarScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
-  card: { marginHorizontal: 20, marginBottom: 16, borderRadius: 20, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
-  summaryRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 16 },
-  summaryCard: { flex: 1, borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  summaryDot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  summaryLabel: { fontSize: 13, fontWeight: '500', marginBottom: 4 },
-  summaryValue: { fontSize: 18, fontWeight: '700' },
-  dayTitle: { fontSize: 18, fontWeight: '700', paddingHorizontal: 20, marginBottom: 12 },
-  emptyText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
-  txRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
-  txIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  txInfo: { flex: 1 },
-  txCategory: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
-  txDesc: { fontSize: 13 },
-  txAmount: { fontSize: 16, fontWeight: '600' },
+  px: { paddingHorizontal: 20 },
+  todayBtn: { paddingHorizontal: 14, height: 36, borderRadius: 18, justifyContent: 'center' },
+  todayText: { color: brand.primary, fontSize: 13.5, fontWeight: '800' },
+  arrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  monthStrip: { flexDirection: 'row', borderRadius: radius.lg, padding: 16, marginTop: 14 },
+  monthCell: { flex: 1 },
+  monthLabel: { fontSize: 12, fontWeight: '700' },
+  monthValue: { fontSize: 19, fontWeight: '900', marginTop: 3, letterSpacing: -0.4 },
+  monthDivider: { width: 1, marginHorizontal: 14 },
+  dayHead: { marginTop: 22, marginBottom: 12, gap: 8 },
+  dayTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
+  dayChips: { flexDirection: 'row', gap: 8 },
+  dayChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  dayChipText: { fontSize: 12.5, fontWeight: '800' },
 });

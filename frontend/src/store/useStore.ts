@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import axios from 'axios';
 import { api, onWakingChange } from '../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { Platform, Appearance } from 'react-native';
 import Toast from 'react-native-toast-message';
 
 // Re-exported so existing `import { API_URL } from '../store/useStore'` keeps working.
@@ -105,7 +105,11 @@ interface AppState {
   generateInsights: (transactions: Transaction[]) => Promise<void>;
   
   // Premium Features
+  /** Display currency. */
   currency: string;
+  /** Currency the stored amounts are recorded in. Display converts base → currency. */
+  baseCurrency: string;
+  /** Rates relative to `baseCurrency` (so exchangeRates[baseCurrency] === 1). */
   exchangeRates: Record<string, number>;
   enableConversion: boolean;
   setCurrency: (currency: string) => void;
@@ -117,6 +121,7 @@ interface AppState {
   // Global Theme
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+  setTheme: (theme: 'light' | 'dark') => void;
 
   // Goal Journey
   goals: Goal[];
@@ -142,9 +147,11 @@ export const useStore = create<AppState>((set) => ({
   insights: [],
   isGeneratingInsights: false,
   currency: 'USD',
+  baseCurrency: 'USD',
   exchangeRates: { 'USD': 1 },
   enableConversion: false,
-  theme: 'light',
+  // Follows the device until the user picks a theme (restored in restoreSession)
+  theme: Appearance.getColorScheme() === 'dark' ? 'dark' : 'light',
   goals: [],
   isLoadingGoals: false,
   streak: null,
@@ -157,13 +164,20 @@ export const useStore = create<AppState>((set) => ({
     });
   },
 
+  setTheme: (theme) => {
+    set({ theme });
+    AsyncStorage.setItem('app_theme', theme);
+  },
+
   restoreSession: async () => {
     try {
       const storedUser = await AsyncStorage.getItem('user_session');
       const storedCurrency = await AsyncStorage.getItem('user_currency');
       const storedConv = await AsyncStorage.getItem('user_enable_conv');
       const storedTheme = await AsyncStorage.getItem('app_theme') as 'light' | 'dark' | null;
-      
+      const storedBase = await AsyncStorage.getItem('user_base_currency');
+      const storedRates = await AsyncStorage.getItem('fx_rates');
+
       if (storedUser) {
         set({ user: JSON.parse(storedUser) });
       }
@@ -176,6 +190,17 @@ export const useStore = create<AppState>((set) => ({
       if (storedTheme) {
         set({ theme: storedTheme });
       }
+
+      // Amounts have always been typed in the selected currency, so an install
+      // without a recorded base currency is treated as recorded in that one.
+      const baseCurrency = storedBase || storedCurrency || 'USD';
+      if (!storedBase) AsyncStorage.setItem('user_base_currency', baseCurrency);
+      let exchangeRates: Record<string, number> = { [baseCurrency]: 1 };
+      if (storedRates) {
+        const cached = JSON.parse(storedRates) as { base: string; rates: Record<string, number> };
+        if (cached.base === baseCurrency) exchangeRates = cached.rates;
+      }
+      set({ baseCurrency, exchangeRates });
     } catch (error) {
       console.error('Failed to restore session:', error);
     }
@@ -294,26 +319,43 @@ export const useStore = create<AppState>((set) => ({
   },
 
   setCurrency: async (currency) => {
-    set({ currency });
+    const { enableConversion, baseCurrency } = useStore.getState();
+    if (enableConversion) {
+      // Converting: amounts stay recorded in the base currency, only the view changes
+      set({ currency });
+    } else {
+      // Not converting: the chosen currency *is* what amounts are recorded in
+      const rebased = currency !== baseCurrency;
+      set({ currency, baseCurrency: currency, ...(rebased ? { exchangeRates: { [currency]: 1 } } : {}) });
+      await AsyncStorage.setItem('user_base_currency', currency);
+    }
     await AsyncStorage.setItem('user_currency', currency);
   },
 
   setEnableConversion: async (val) => {
-    set({ enableConversion: val });
+    if (val) {
+      set({ enableConversion: true });
+      useStore.getState().fetchExchangeRates();
+    } else {
+      // Back to unconverted amounts, shown in the currency they were recorded in
+      const { baseCurrency } = useStore.getState();
+      set({ enableConversion: false, currency: baseCurrency });
+      await AsyncStorage.setItem('user_currency', baseCurrency);
+    }
     await AsyncStorage.setItem('user_enable_conv', val.toString());
   },
 
   fetchExchangeRates: async () => {
-    const { currency } = useStore.getState();
+    const { baseCurrency } = useStore.getState();
     try {
-      // Using Frankfurter API (Free, no auth required, base EUR by default but we can request base)
-      const res = await axios.get(`https://api.frankfurter.app/latest?from=USD`);
+      // Frankfurter: free, no auth. Rates are fetched relative to the base currency.
+      const res = await axios.get(`https://api.frankfurter.dev/v1/latest?from=${baseCurrency}`);
       // Frankfurter doesn't include the base in the rates object, so we add it manually
-      const rates = { ...res.data.rates, USD: 1 };
-      
-      // If the user selected a base currency other than USD, we just recalculate relative to USD 
-      // Actually, to make it simple, we store all rates relative to USD, and then in the UI we multiply by `exchangeRates[currency]`
+      const rates = { ...res.data.rates, [baseCurrency]: 1 };
+      // Ignore a response that raced a base-currency change
+      if (useStore.getState().baseCurrency !== baseCurrency) return;
       set({ exchangeRates: rates });
+      AsyncStorage.setItem('fx_rates', JSON.stringify({ base: baseCurrency, rates }));
     } catch (error) {
       console.error('Failed to fetch exchange rates', error);
     }

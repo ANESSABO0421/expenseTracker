@@ -1,171 +1,209 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Image, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, TextInput, Image, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from 'nativewind';
-import { useStore } from '../store/useStore';
-import { BackgroundGradient } from '../components/BackgroundGradient';
-import { GlassCard } from '../components/GlassCard';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useStore, Transaction } from '../store/useStore';
+import { formatCurrency, toBaseAmount, toDisplayAmount } from '../utils/formatCurrency';
+import { useTheme, brand, radius, shadow } from '../theme';
+import { categoryMeta } from '../theme/categories';
+import { IconButton, PrimaryButton, GhostButton, CategoryIcon } from '../components/ui';
+
+type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function TransactionDetailsScreen({ route, navigation }: any) {
-  const { transaction } = route.params;
-  const { updateTransaction, deleteTransaction, currency, exchangeRates } = useStore();
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { transaction: initial } = route.params as { transaction: Transaction };
+  const { updateTransaction, deleteTransaction, currency, exchangeRates, enableConversion, transactions } = useStore();
+  const { c } = useTheme();
+  const insets = useSafeAreaInsets();
+  const rates = enableConversion ? exchangeRates : null;
+
+  // Prefer the live copy from the store so edits show immediately.
+  const transaction = transactions.find(t => t._id === initial._id) ?? initial;
+
+  // The edit field works in the display currency, like the rest of the screen
+  const displayAmount = String(Math.round(toDisplayAmount(transaction.amount, currency, rates) * 100) / 100);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [amount, setAmount] = useState(transaction.amount.toString());
+  const [isSaving, setIsSaving] = useState(false);
+  const [amount, setAmount] = useState(displayAmount);
   const [category, setCategory] = useState(transaction.category);
   const [description, setDescription] = useState(transaction.description || '');
 
+  const isIncome = transaction.type === 'income';
+  const meta = categoryMeta(transaction.category);
+  const date = new Date(transaction.date);
+
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Transaction",
-      "Are you sure you want to delete this transaction?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive",
-          onPress: async () => {
-            await deleteTransaction(transaction._id);
-            navigation.goBack();
-          }
-        }
-      ]
-    );
+    Alert.alert('Delete transaction', 'This can’t be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          await deleteTransaction(transaction._id);
+          navigation.goBack();
+        },
+      },
+    ]);
   };
 
   const handleSave = async () => {
-    const updatedData = {
-      amount: parseFloat(amount) || 0,
-      category,
-      description
-    };
-    await updateTransaction(transaction._id, updatedData);
+    setIsSaving(true);
+    // Untouched amount keeps its exact stored value (no conversion round-trip drift)
+    const stored = amount === displayAmount ? transaction.amount : toBaseAmount(parseFloat(amount) || 0, currency, rates);
+    await updateTransaction(transaction._id, { amount: stored, category, description });
+    setIsSaving(false);
     setIsEditing(false);
   };
 
-  const isIncome = transaction.type === 'income';
-  const displayAmount = (parseFloat(amount) || transaction.amount);
-  // Display amount converted to selected currency
-  const convertedAmount = exchangeRates && exchangeRates[currency] ? displayAmount * exchangeRates[currency] : displayAmount;
-  const formattedAmount = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(convertedAmount);
+  // Re-sync the fields with the stored transaction each time editing starts
+  const startEdit = () => {
+    setAmount(displayAmount);
+    setCategory(transaction.category);
+    setDescription(transaction.description || '');
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setAmount(displayAmount);
+    setCategory(transaction.category);
+    setDescription(transaction.description || '');
+    setIsEditing(false);
+  };
+
+  const rows: { icon: IconName; label: string; value: string }[] = [
+    { icon: 'pricetag-outline', label: 'Category', value: transaction.category },
+    { icon: isIncome ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline', label: 'Type', value: isIncome ? 'Income' : 'Expense' },
+    { icon: 'calendar-outline', label: 'Date', value: date.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) },
+    { icon: 'time-outline', label: 'Time', value: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) },
+  ];
 
   return (
-    <BackgroundGradient>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Header */}
+    <SafeAreaView style={[styles.container, { backgroundColor: c.bg }]} edges={['top']}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: isDark ? '#111' : '#FFF' }]}>
-            <Ionicons name="close" size={24} color={isDark ? '#FFF' : '#111'} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: isDark ? '#FFF' : '#111' }]}>
-            {isEditing ? 'Edit Transaction' : 'Details'}
-          </Text>
-          <TouchableOpacity onPress={() => isEditing ? handleSave() : setIsEditing(true)} style={[styles.iconBtn, { backgroundColor: isDark ? '#111' : '#FFF' }]}>
-            <Ionicons name={isEditing ? "checkmark" : "pencil"} size={20} color={isDark ? '#FFF' : '#111'} />
-          </TouchableOpacity>
+          <IconButton icon="close" onPress={() => (isEditing ? cancelEdit() : navigation.goBack())} />
+          <Text style={[styles.headerTitle, { color: c.text }]}>{isEditing ? 'Edit transaction' : 'Transaction'}</Text>
+          {isEditing ? <View style={{ width: 42 }} /> : <IconButton icon="create-outline" onPress={startEdit} />}
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
-          <GlassCard style={styles.mainCard} intensity={isDark ? 40 : 80}>
-            
-            <View style={[styles.iconCircle, { backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
-              <Ionicons name={isIncome ? 'arrow-down' : 'arrow-up'} size={40} color={isIncome ? '#10B981' : '#EF4444'} />
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          {/* Hero */}
+          <Animated.View entering={FadeInDown.duration(400)} style={[styles.hero, { backgroundColor: c.surface }, shadow(c, 2)]}>
+            <View style={[styles.heroGlow, { backgroundColor: meta.color + '14' }]} />
+            <CategoryIcon category={transaction.category} size={68} rounded={24} />
+            <Text style={[styles.heroCategory, { color: c.textSecondary }]}>{transaction.category}</Text>
+            <Text style={[styles.heroAmount, { color: isIncome ? brand.income : c.text }]} numberOfLines={1} adjustsFontSizeToFit>
+              {isIncome ? '+' : '−'}{formatCurrency(transaction.amount, currency, rates)}
+            </Text>
+            <View style={[styles.statusPill, { backgroundColor: isIncome ? c.incomeSoft : c.expenseSoft }]}>
+              <Ionicons name="checkmark-circle" size={13} color={isIncome ? brand.income : brand.expense} />
+              <Text style={[styles.statusText, { color: isIncome ? brand.income : brand.expense }]}>
+                {isIncome ? 'Received' : 'Paid'}
+              </Text>
             </View>
-            
+
+            {/* Perforation */}
+            <View style={styles.perfRow}>
+              <View style={[styles.notch, { backgroundColor: c.bg, left: -30 }]} />
+              <View style={[styles.dash, { borderColor: c.border }]} />
+              <View style={[styles.notch, { backgroundColor: c.bg, right: -30 }]} />
+            </View>
+
             {isEditing ? (
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Amount (Base USD)</Text>
-                <TextInput
-                  style={[styles.input, { color: isDark ? '#FFF' : '#111', borderColor: isDark ? '#333' : '#E5E7EB' }]}
-                  value={amount}
-                  onChangeText={setAmount}
-                  keyboardType="numeric"
-                />
-                
-                <Text style={[styles.label, { color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 16 }]}>Category</Text>
-                <TextInput
-                  style={[styles.input, { color: isDark ? '#FFF' : '#111', borderColor: isDark ? '#333' : '#E5E7EB' }]}
-                  value={category}
-                  onChangeText={setCategory}
-                />
-                
-                <Text style={[styles.label, { color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 16 }]}>Description</Text>
-                <TextInput
-                  style={[styles.input, { color: isDark ? '#FFF' : '#111', borderColor: isDark ? '#333' : '#E5E7EB' }]}
-                  value={description}
-                  onChangeText={setDescription}
-                  multiline
-                />
+              <View style={{ width: '100%', gap: 14 }}>
+                <EditField label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
+                <EditField label="Category" value={category} onChangeText={setCategory} />
+                <EditField label="Note" value={description} onChangeText={setDescription} multiline placeholder="Add a note" />
               </View>
             ) : (
-              <>
-                <Text style={[styles.amountText, { color: isIncome ? '#10B981' : (isDark ? '#FFF' : '#111') }]}>
-                  {isIncome ? '+' : '-'}{formattedAmount}
-                </Text>
-                
-                <View style={styles.detailsRow}>
-                  <Text style={[styles.detailLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Category</Text>
-                  <Text style={[styles.detailValue, { color: isDark ? '#FFF' : '#111' }]}>{transaction.category}</Text>
-                </View>
-                
-                <View style={styles.detailsRow}>
-                  <Text style={[styles.detailLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Date</Text>
-                  <Text style={[styles.detailValue, { color: isDark ? '#FFF' : '#111' }]}>{new Date(transaction.date).toLocaleString()}</Text>
-                </View>
-                
+              <View style={{ width: '100%' }}>
+                {rows.map(r => (
+                  <View key={r.label} style={styles.row}>
+                    <Ionicons name={r.icon} size={17} color={c.textTertiary} />
+                    <Text style={[styles.rowLabel, { color: c.textSecondary }]}>{r.label}</Text>
+                    <Text style={[styles.rowValue, { color: c.text }]} numberOfLines={1}>{r.value}</Text>
+                  </View>
+                ))}
                 {transaction.description ? (
-                  <View style={styles.detailsRow}>
-                    <Text style={[styles.detailLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Note</Text>
-                    <Text style={[styles.detailValue, { color: isDark ? '#FFF' : '#111' }]}>{transaction.description}</Text>
+                  <View style={[styles.note, { backgroundColor: c.surfaceAlt }]}>
+                    <Text style={[styles.noteLabel, { color: c.textSecondary }]}>NOTE</Text>
+                    <Text style={[styles.noteText, { color: c.text }]}>{transaction.description}</Text>
                   </View>
                 ) : null}
-
-                {transaction.receiptUrl && (
-                  <View style={styles.receiptContainer}>
-                    <Text style={[styles.detailLabel, { color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 12 }]}>Receipt</Text>
-                    <Image source={{ uri: transaction.receiptUrl }} style={styles.receiptImage} resizeMode="cover" />
-                  </View>
-                )}
-              </>
+              </View>
             )}
-          </GlassCard>
+          </Animated.View>
 
-          {!isEditing && (
-            <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
-              <Text style={styles.deleteText}>Delete Transaction</Text>
-            </TouchableOpacity>
+          {transaction.receiptUrl && !isEditing && (
+            <Animated.View entering={FadeInDown.delay(100).duration(400)} style={{ marginTop: 18 }}>
+              <Text style={[styles.receiptLabel, { color: c.text }]}>Receipt</Text>
+              <Image source={{ uri: transaction.receiptUrl }} style={[styles.receipt, { backgroundColor: c.surfaceAlt }]} resizeMode="cover" />
+            </Animated.View>
           )}
-
         </ScrollView>
-      </SafeAreaView>
-    </BackgroundGradient>
+
+        <View style={[styles.bottomBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 14) }]}>
+          {isEditing ? (
+            <>
+              <GhostButton title="Cancel" onPress={cancelEdit} style={{ flex: 1 }} />
+              <PrimaryButton title="Save changes" icon="checkmark" onPress={handleSave} loading={isSaving} style={{ flex: 2 }} />
+            </>
+          ) : (
+            <>
+              <GhostButton title="Delete" icon="trash-outline" color={brand.expense} onPress={handleDelete} style={{ flex: 1 }} />
+              <PrimaryButton title="Edit" icon="create-outline" onPress={startEdit} style={{ flex: 1 }} />
+            </>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function EditField({ label, ...props }: React.ComponentProps<typeof TextInput> & { label: string }) {
+  const { c } = useTheme();
+  return (
+    <View>
+      <Text style={[styles.editLabel, { color: c.textSecondary }]}>{label}</Text>
+      <TextInput
+        placeholderTextColor={c.textTertiary}
+        selectionColor={brand.primary}
+        {...props}
+        style={[styles.editInput, { color: c.text, backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16 },
-  headerTitle: { fontSize: 20, fontWeight: '800' },
-  iconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 24 },
-  mainCard: { padding: 32, alignItems: 'center', borderRadius: 40 },
-  iconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  amountText: { fontSize: 48, fontWeight: '900', letterSpacing: -2, marginBottom: 32 },
-  detailsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(150,150,150,0.2)' },
-  detailLabel: { fontSize: 16, fontWeight: '600' },
-  detailValue: { fontSize: 16, fontWeight: '700' },
-  receiptContainer: { width: '100%', marginTop: 24 },
-  receiptImage: { width: '100%', height: 200, borderRadius: 16 },
-  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 32, padding: 16, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 24 },
-  deleteText: { color: '#EF4444', fontSize: 16, fontWeight: '700', marginLeft: 8 },
-  inputGroup: { width: '100%' },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase' },
-  input: { borderWidth: 1, borderRadius: 16, padding: 16, fontSize: 16, fontWeight: '600' }
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
+  headerTitle: { fontSize: 17, fontWeight: '800' },
+
+  hero: { borderRadius: 26, padding: 22, alignItems: 'center', overflow: 'hidden' },
+  heroGlow: { position: 'absolute', top: -80, width: 260, height: 200, borderRadius: 130 },
+  heroCategory: { fontSize: 14, fontWeight: '700', marginTop: 14 },
+  heroAmount: { fontSize: 42, fontWeight: '900', letterSpacing: -1.5, marginTop: 4 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, marginTop: 10 },
+  statusText: { fontSize: 12, fontWeight: '800' },
+
+  perfRow: { width: '100%', height: 28, justifyContent: 'center', marginVertical: 14 },
+  notch: { position: 'absolute', width: 28, height: 28, borderRadius: 14 },
+  dash: { borderTopWidth: 1.5, borderStyle: 'dashed', marginHorizontal: 6 },
+
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+  rowLabel: { fontSize: 14.5, fontWeight: '600', width: 80 },
+  rowValue: { flex: 1, textAlign: 'right', fontSize: 14.5, fontWeight: '800' },
+  note: { borderRadius: radius.md, padding: 14, marginTop: 10 },
+  noteLabel: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
+  noteText: { fontSize: 14.5, fontWeight: '500', lineHeight: 20 },
+
+  receiptLabel: { fontSize: 16, fontWeight: '900', marginBottom: 10 },
+  receipt: { width: '100%', height: 240, borderRadius: radius.lg },
+
+  editLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 },
+  editInput: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, fontWeight: '700' },
+
+  bottomBar: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
 });

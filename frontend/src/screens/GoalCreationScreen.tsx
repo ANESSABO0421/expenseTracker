@@ -1,24 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Image
+  View, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Image, StyleSheet, Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useColorScheme } from 'nativewind';
+import Animated, { FadeInRight, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
 import { useStore, GoalPlan } from '../store/useStore';
 import { api } from '../utils/api';
-import { formatCurrency } from '../utils/formatCurrency';
+import { formatCurrency, toBaseAmount } from '../utils/formatCurrency';
+import { useTheme, brand, radius, shadow, CURRENCY_SYMBOLS } from '../theme';
+import { IconButton, PressableScale, PrimaryButton } from '../components/ui';
 
-const GOLD = '#D4B26A';
-const EMERALD = '#48C79A';
-
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥', CAD: 'CA$', AUD: 'A$',
-};
+const { width } = Dimensions.get('window');
+const TILE_W = (width - 40 - 20) / 3;
+const GOAL_GRADIENT = [brand.gold, brand.emerald] as const;
 
 const CATEGORY_OPTIONS: { key: string; label: string; emoji: string; category: string }[] = [
   { key: 'macbook', label: 'MacBook', emoji: '💻', category: 'tech' },
@@ -33,19 +31,21 @@ const CATEGORY_OPTIONS: { key: string; label: string; emoji: string; category: s
 ];
 
 const DEADLINE_PRESETS = [
-  { label: '3 months', months: 3 },
-  { label: '6 months', months: 6 },
-  { label: '1 year', months: 12 },
-  { label: '2 years', months: 24 },
-  { label: 'No deadline', months: null as number | null },
+  { label: '3 months', months: 3, icon: 'flash' as const },
+  { label: '6 months', months: 6, icon: 'walk' as const },
+  { label: '1 year', months: 12, icon: 'calendar' as const },
+  { label: '2 years', months: 24, icon: 'hourglass' as const },
+  { label: 'No deadline', months: null as number | null, icon: 'infinite' as const },
 ];
 
 const TOTAL_STEPS = 5;
+const STEP_TITLES = ['', 'What are you\nsaving for?', 'Make it real', 'How much do\nyou need?', 'By when?', 'Your plan'];
 
 export default function GoalCreationScreen({ navigation }: any) {
   const { user, currency, exchangeRates, enableConversion, getGoalPlan, createGoal, transactions } = useStore();
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { c, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const rates = enableConversion ? exchangeRates : null;
 
   const [step, setStep] = useState(1);
   const [category, setCategory] = useState<typeof CATEGORY_OPTIONS[0] | null>(null);
@@ -59,12 +59,19 @@ export default function GoalCreationScreen({ navigation }: any) {
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  const deadlineDate = (): string | null => {
-    if (!deadlineMonths) return null;
+  const progress = useSharedValue(1 / TOTAL_STEPS);
+  useEffect(() => { progress.value = withTiming(step / TOTAL_STEPS, { duration: 350 }); }, [step]);
+  const progressStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
+
+  const deadlineDate = (months = deadlineMonths): string | null => {
+    if (!months) return null;
     const d = new Date();
-    d.setMonth(d.getMonth() + deadlineMonths);
+    d.setMonth(d.getMonth() + months);
     return d.toISOString();
   };
+
+  // Target is typed in the display currency; the goal is stored in the base currency
+  const targetBase = toBaseAmount(Number(targetAmount) || 0, currency, rates);
 
   const avgMonthlySaving = (() => {
     if (!transactions?.length) return 0;
@@ -82,8 +89,7 @@ export default function GoalCreationScreen({ navigation }: any) {
 
   const selectCategory = (opt: typeof CATEGORY_OPTIONS[0]) => {
     setCategory(opt);
-    if (opt.key !== 'custom') setTitle(opt.label);
-    else setTitle('');
+    setTitle(opt.key !== 'custom' ? opt.label : '');
     goNext();
   };
 
@@ -107,7 +113,7 @@ export default function GoalCreationScreen({ navigation }: any) {
       const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
       const response = await api.post(`/upload`, { base64Image });
       setImageUrl(response.data.data.receiptUrl);
-    } catch (err: any) {
+    } catch {
       Toast.show({ type: 'error', text1: 'Upload failed', text2: 'Using the default look instead.' });
       setImageUri(null);
     } finally {
@@ -117,15 +123,12 @@ export default function GoalCreationScreen({ navigation }: any) {
 
   const generatePlan = async () => {
     setIsGeneratingPlan(true);
-    const result = await getGoalPlan({
-      title,
-      targetAmount: Number(targetAmount),
-      deadline: deadlineDate(),
-      avgMonthlySaving,
-    });
+    const result = await getGoalPlan({ title, targetAmount: targetBase, deadline: deadlineDate(), avgMonthlySaving });
     setPlan(result);
     setIsGeneratingPlan(false);
   };
+
+  const handleNameNext = () => (title.trim() ? goNext() : Toast.show({ type: 'error', text1: 'Name your goal' }));
 
   const handleAmountNext = () => {
     const amt = Number(targetAmount);
@@ -154,7 +157,7 @@ export default function GoalCreationScreen({ navigation }: any) {
       category: (category?.category || 'custom') as any,
       emoji: category?.emoji || '🎯',
       imageUrl: imageUrl || undefined,
-      targetAmount: Number(targetAmount),
+      targetAmount: targetBase,
       deadline: deadlineDate(),
       requiredMonthly: plan.requiredMonthly,
       requiredWeekly: plan.requiredWeekly,
@@ -162,380 +165,274 @@ export default function GoalCreationScreen({ navigation }: any) {
       projectedCompletionDate: plan.projectedCompletionDate,
     } as any);
     setIsCreating(false);
-    if (goal) {
-      navigation.replace('GoalDetail', { goalId: goal._id });
-    }
+    if (goal) navigation.replace('GoalDetail', { goalId: goal._id });
   };
 
-  // Separator color for step dots (needs to be inline since it's a computed rgba)
-  const separatorColor = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(30,24,12,0.1)';
+  const cta: Record<number, { title: string; onPress: () => void; loading?: boolean; disabled?: boolean } | null> = {
+    1: null,
+    2: { title: 'Continue', onPress: handleNameNext, disabled: isUploadingImage },
+    3: { title: 'Continue', onPress: handleAmountNext },
+    4: { title: 'Generate my plan', onPress: handleDeadlineNext },
+    5: { title: "I'm in", onPress: handleCommit, loading: isCreating, disabled: isGeneratingPlan || !plan },
+  };
+  const current = cta[step];
 
   return (
-    <SafeAreaView
-      className={`flex-1 ${isDark ? 'bg-bgDark' : 'bg-bgLight'}`}
-      edges={['top', 'bottom']}
-    >
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-5 pt-2 pb-1">
-          <TouchableOpacity
-            onPress={goBack}
-            className={`w-9 h-9 rounded-full items-center justify-center ${isDark ? 'bg-cardDark' : 'bg-cardLight'}`}
-          >
-            <Ionicons
-              name={step === 1 ? 'close' : 'chevron-back'}
-              size={20}
-              color={isDark ? '#EDEAE1' : '#211C13'}
-            />
-          </TouchableOpacity>
-
-          {/* Step dots */}
-          <View className="flex-row items-center gap-[5px]">
-            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-              <View
-                key={i}
-                style={{
-                  height: 6,
-                  width: i === step - 1 ? 20 : 6,
-                  borderRadius: 3,
-                  backgroundColor: i < step ? GOLD : separatorColor,
-                }}
-              />
-            ))}
+    <SafeAreaView style={[styles.container, { backgroundColor: c.bg }]} edges={['top']}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        {/* Header + progress */}
+        <View style={styles.header}>
+          <IconButton icon={step === 1 ? 'close' : 'chevron-back'} onPress={goBack} />
+          <View style={{ flex: 1, marginHorizontal: 16 }}>
+            <View style={[styles.progressTrack, { backgroundColor: c.surfaceAlt }]}>
+              <Animated.View style={[styles.progressFill, progressStyle]}>
+                <LinearGradient colors={GOAL_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+              </Animated.View>
+            </View>
           </View>
-
-          <View className="w-9" />
+          <Text style={[styles.stepCount, { color: c.textSecondary }]}>{step}/{TOTAL_STEPS}</Text>
         </View>
 
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <Animated.View key={step} entering={FadeInRight.duration(280)}>
+            <Text style={styles.eyebrow}>STEP {step} OF {TOTAL_STEPS}</Text>
+            <Text style={[styles.title, { color: c.text }]}>{STEP_TITLES[step]}</Text>
 
-          {/* ── STEP 1 — category ── */}
-          {step === 1 && (
-            <View>
-              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
-                Step 1 of {TOTAL_STEPS}
-              </Text>
-              <Text
-                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
-              >
-                What are you{'\n'}saving for?
-              </Text>
-
-              <View className="mt-6 gap-[10px]">
+            {/* Step 1 — category */}
+            {step === 1 && (
+              <View style={styles.grid}>
                 {CATEGORY_OPTIONS.map(opt => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    onPress={() => selectCategory(opt)}
-                    activeOpacity={0.8}
-                    className={`flex-row items-center gap-[14px] p-4 rounded-2xl border ${
-                      isDark
-                        ? 'bg-cardDark border-white/[0.09]'
-                        : 'bg-cardLight border-black/[0.1]'
-                    }`}
-                  >
-                    <Text className="text-2xl">{opt.emoji}</Text>
-                    <Text
-                      className={`flex-1 text-base font-semibold ${isDark ? 'text-textDark' : 'text-textLight'}`}
-                    >
-                      {opt.label}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={16} color={isDark ? '#9A98A6' : '#726A57'} />
-                  </TouchableOpacity>
+                  <PressableScale key={opt.key} onPress={() => selectCategory(opt)} scaleTo={0.93}
+                    style={[styles.tile, { backgroundColor: c.surface, borderColor: category?.key === opt.key ? brand.gold : c.border }, shadow(c, 1)]}>
+                    <View style={[styles.tileEmoji, { backgroundColor: c.surfaceAlt }]}>
+                      <Text style={{ fontSize: 28 }}>{opt.emoji}</Text>
+                    </View>
+                    <Text style={[styles.tileLabel, { color: c.text }]} numberOfLines={1}>{opt.label}</Text>
+                  </PressableScale>
                 ))}
               </View>
-            </View>
-          )}
+            )}
 
-          {/* ── STEP 2 — name + image ── */}
-          {step === 2 && (
-            <View>
-              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
-                Step 2 of {TOTAL_STEPS}
-              </Text>
-              <Text
-                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
-              >
-                Make it real
-              </Text>
-              <Text className={`text-sm mt-2 leading-5 ${isDark ? 'text-subDark' : 'text-subLight'}`}>
-                Give it a name, and a picture to look at every day.
-              </Text>
-
-              <TextInput
-                value={title}
-                onChangeText={setTitle}
-                placeholder='e.g. MacBook Pro 14"'
-                placeholderTextColor={isDark ? '#9A98A6' : '#726A57'}
-                className={`mt-5 border rounded-[14px] px-4 py-[14px] text-base font-semibold ${
-                  isDark
-                    ? 'bg-cardDark text-textDark border-white/[0.09]'
-                    : 'bg-cardLight text-textLight border-black/[0.1]'
-                }`}
-              />
-
-              <TouchableOpacity
-                onPress={() => pickImage(false)}
-                disabled={isUploadingImage}
-                activeOpacity={0.85}
-                className={`mt-4 h-40 rounded-[18px] border overflow-hidden ${
-                  isDark
-                    ? 'bg-cardDark border-white/[0.09]'
-                    : 'bg-cardLight border-black/[0.1]'
-                }`}
-              >
-                {imageUri ? (
-                  <Image source={{ uri: imageUri }} className="w-full h-full" />
-                ) : (
-                  <LinearGradient
-                    colors={isDark ? ['#1B2032', '#161923'] : ['#FBF7EE', '#FFFFFF']}
-                    className="w-full h-full items-center justify-center"
-                  >
-                    <Text className="text-[34px]">{category?.emoji || '🎯'}</Text>
-                  </LinearGradient>
-                )}
-                <View className="absolute bottom-0 left-0 right-0 flex-row gap-1.5 items-center justify-center py-2.5 bg-black/[0.45]">
-                  {isUploadingImage ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="camera" size={16} color="#FFF" />
-                      <Text className="text-white text-[13px] font-bold">
-                        {imageUri ? 'Change photo' : 'Add a photo'}
-                      </Text>
-                    </>
-                  )}
+            {/* Step 2 — name + image */}
+            {step === 2 && (
+              <View>
+                <Text style={[styles.sub, { color: c.textSecondary }]}>Give it a name, and a picture to look at every day.</Text>
+                <View style={[styles.inputWrap, { backgroundColor: c.surface, borderColor: c.border }]}>
+                  <Text style={{ fontSize: 22 }}>{category?.emoji || '🎯'}</Text>
+                  <TextInput
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder='e.g. MacBook Pro 14"'
+                    placeholderTextColor={c.textTertiary}
+                    style={[styles.input, { color: c.text }]}
+                    selectionColor={brand.gold}
+                    autoFocus
+                  />
                 </View>
-              </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => pickImage(true)} className="self-center mt-2.5">
-                <Text className={`text-[13px] font-semibold ${isDark ? 'text-subDark' : 'text-subLight'}`}>
-                  or take a photo
-                </Text>
-              </TouchableOpacity>
+                <PressableScale onPress={() => pickImage(false)} disabled={isUploadingImage} scaleTo={0.98}
+                  style={[styles.photo, { backgroundColor: c.surface, borderColor: c.border }]}>
+                  {imageUri ? (
+                    <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} />
+                  ) : (
+                    <LinearGradient colors={isDark ? ['#2A2418', '#16171D'] : ['#FFF6EA', '#FFFFFF']} style={[StyleSheet.absoluteFill, styles.center]}>
+                      <View style={[styles.photoIcon, { backgroundColor: 'rgba(212,178,106,0.18)' }]}>
+                        <Ionicons name="image" size={26} color={brand.gold} />
+                      </View>
+                      <Text style={[styles.photoHint, { color: c.textSecondary }]}>Tap to add a cover photo</Text>
+                    </LinearGradient>
+                  )}
+                  {(imageUri || isUploadingImage) && (
+                    <View style={styles.photoBar}>
+                      {isUploadingImage ? <ActivityIndicator color="#FFF" /> : (
+                        <>
+                          <Ionicons name="camera" size={15} color="#FFF" />
+                          <Text style={styles.photoBarText}>Change photo</Text>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </PressableScale>
 
-              <TouchableOpacity
-                onPress={() => title.trim() ? goNext() : Toast.show({ type: 'error', text1: 'Name your goal' })}
-                className="mt-[26px]"
-              >
-                <LinearGradient
-                  colors={[GOLD, EMERALD]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  className="rounded-2xl py-[17px] items-center justify-center"
-                >
-                  <Text className="text-white text-base font-bold">Continue</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ── STEP 3 — target amount ── */}
-          {step === 3 && (
-            <View>
-              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
-                Step 3 of {TOTAL_STEPS}
-              </Text>
-              <Text
-                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
-              >
-                How much do{'\n'}you need?
-              </Text>
-
-              <View
-                className={`mt-5 border rounded-[18px] p-6 flex-row items-center justify-center gap-1.5 ${
-                  isDark
-                    ? 'bg-cardDark border-white/[0.09]'
-                    : 'bg-cardLight border-black/[0.1]'
-                }`}
-              >
-                <Text className="text-[32px] font-bold" style={{ color: GOLD }}>
-                  {CURRENCY_SYMBOLS[currency] || currency}
-                </Text>
-                <TextInput
-                  value={targetAmount}
-                  onChangeText={setTargetAmount}
-                  placeholder="0"
-                  placeholderTextColor={isDark ? '#9A98A6' : '#726A57'}
-                  keyboardType="decimal-pad"
-                  autoFocus
-                  className={`text-[40px] font-bold min-w-[100px] ${isDark ? 'text-textDark' : 'text-textLight'}`}
-                />
+                <PressableScale onPress={() => pickImage(true)} style={styles.cameraLink}>
+                  <Ionicons name="camera-outline" size={16} color={brand.primary} />
+                  <Text style={styles.cameraLinkText}>Take a photo instead</Text>
+                </PressableScale>
               </View>
+            )}
 
-              {avgMonthlySaving > 0 && (
-                <Text className={`text-[12.5px] mt-2.5 ${isDark ? 'text-subDark' : 'text-subLight'}`}>
-                  ≈ {formatCurrency(avgMonthlySaving, currency, enableConversion ? exchangeRates : null)}/mo is your average recent saving rate.
-                </Text>
-              )}
+            {/* Step 3 — target amount */}
+            {step === 3 && (
+              <View>
+                <View style={[styles.amountCard, { backgroundColor: c.surface }, shadow(c, 1)]}>
+                  <Text style={[styles.amountSymbol, { color: brand.gold }]}>{CURRENCY_SYMBOLS[currency] || currency}</Text>
+                  <TextInput
+                    value={targetAmount}
+                    onChangeText={setTargetAmount}
+                    placeholder="0"
+                    placeholderTextColor={c.textTertiary}
+                    keyboardType="decimal-pad"
+                    autoFocus
+                    selectionColor={brand.gold}
+                    style={[styles.amountInput, { color: c.text }]}
+                  />
+                </View>
+                {avgMonthlySaving > 0 && (
+                  <View style={[styles.hint, { backgroundColor: c.incomeSoft }]}>
+                    <Ionicons name="trending-up" size={16} color={brand.income} />
+                    <Text style={[styles.hintText, { color: c.text }]}>
+                      You save about <Text style={{ fontWeight: '900' }}>{formatCurrency(avgMonthlySaving, currency, rates)}/mo</Text> on average.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
-              <TouchableOpacity onPress={handleAmountNext} className="mt-[26px]">
-                <LinearGradient
-                  colors={[GOLD, EMERALD]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  className="rounded-2xl py-[17px] items-center justify-center"
-                >
-                  <Text className="text-white text-base font-bold">Continue</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ── STEP 4 — deadline ── */}
-          {step === 4 && (
-            <View>
-              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
-                Step 4 of {TOTAL_STEPS}
-              </Text>
-              <Text
-                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
-              >
-                By when?
-              </Text>
-
-              <View className="mt-5 gap-[10px]">
+            {/* Step 4 — deadline */}
+            {step === 4 && (
+              <View style={{ gap: 10, marginTop: 20 }}>
                 {DEADLINE_PRESETS.map(p => {
-                  const isSelected = deadlineMonths === p.months;
+                  const selected = deadlineMonths === p.months;
+                  const d = deadlineDate(p.months);
+                  const perMonth = p.months && Number(targetAmount) ? Number(targetAmount) / p.months : null;
                   return (
-                    <TouchableOpacity
-                      key={p.label}
-                      onPress={() => setDeadlineMonths(p.months)}
-                      className={`flex-row items-center p-4 rounded-[14px] border ${
-                        isSelected
-                          ? 'border-gold'
-                          : isDark
-                            ? 'bg-cardDark border-white/[0.09]'
-                            : 'bg-cardLight border-black/[0.1]'
-                      }`}
-                      style={isSelected ? { backgroundColor: 'rgba(212,178,106,0.12)', borderColor: GOLD } : undefined}
-                    >
-                      <Text
-                        className={`flex-1 text-base font-semibold ${isDark ? 'text-textDark' : 'text-textLight'}`}
-                      >
-                        {p.label}
-                      </Text>
-                      {isSelected && <Ionicons name="checkmark-circle" size={20} color={GOLD} />}
-                    </TouchableOpacity>
+                    <PressableScale key={p.label} onPress={() => setDeadlineMonths(p.months)} scaleTo={0.98}
+                      style={[styles.option, { backgroundColor: selected ? 'rgba(212,178,106,0.12)' : c.surface, borderColor: selected ? brand.gold : c.border }]}>
+                      <View style={[styles.optionIcon, { backgroundColor: selected ? brand.gold : c.surfaceAlt }]}>
+                        <Ionicons name={p.icon} size={18} color={selected ? '#FFF' : c.textSecondary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.optionTitle, { color: c.text }]}>{p.label}</Text>
+                        <Text style={[styles.optionSub, { color: c.textSecondary }]}>
+                          {d ? `By ${new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : 'Save at your own pace'}
+                          {perMonth ? ` · ~${formatCurrency(perMonth, currency, null)}/mo` : ''}
+                        </Text>
+                      </View>
+                      <View style={[styles.radio, { borderColor: selected ? brand.gold : c.border }]}>
+                        {selected && <View style={styles.radioDot} />}
+                      </View>
+                    </PressableScale>
                   );
                 })}
               </View>
+            )}
 
-              <TouchableOpacity onPress={handleDeadlineNext} className="mt-[26px]">
-                <LinearGradient
-                  colors={[GOLD, EMERALD]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  className="rounded-2xl py-[17px] items-center justify-center"
-                >
-                  <Text className="text-white text-base font-bold">Generate my plan</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ── STEP 5 — AI plan ── */}
-          {step === 5 && (
-            <View>
-              <Text className="text-[11px] font-extrabold tracking-[1.2px] uppercase mb-2" style={{ color: GOLD }}>
-                Step 5 of {TOTAL_STEPS}
-              </Text>
-              <Text
-                className={`text-[30px] font-bold leading-[36px] tracking-tight ${isDark ? 'text-textDark' : 'text-textLight'}`}
-              >
-                Your plan
-              </Text>
-
-              {isGeneratingPlan || !plan ? (
-                <View className="py-[60px] items-center">
-                  <ActivityIndicator size="large" color={GOLD} />
-                  <Text className={`mt-3 text-[13px] ${isDark ? 'text-subDark' : 'text-subLight'}`}>
-                    Thinking this through...
-                  </Text>
+            {/* Step 5 — AI plan */}
+            {step === 5 && (
+              isGeneratingPlan || !plan ? (
+                <View style={styles.thinking}>
+                  <ActivityIndicator size="large" color={brand.gold} />
+                  <Text style={[styles.thinkingText, { color: c.textSecondary }]}>Crafting your plan…</Text>
                 </View>
               ) : (
-                <>
-                  {/* Motivational quote */}
-                  <View
-                    className={`mt-5 border rounded-[18px] p-5 ${
-                      isDark
-                        ? 'bg-cardDark border-white/[0.09]'
-                        : 'bg-cardLight border-black/[0.1]'
-                    }`}
-                  >
-                    <Text
-                      className="text-[17px] italic font-semibold leading-6 text-center"
-                      style={{ color: GOLD }}
-                    >
-                      "{plan.motivationalLine}"
-                    </Text>
-                  </View>
+                <View style={{ marginTop: 20 }}>
+                  <LinearGradient colors={GOAL_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.planHero}>
+                    <View style={styles.planBlob} />
+                    <Text style={styles.planEmoji}>{category?.emoji || '🎯'}</Text>
+                    <Text style={styles.planTitle} numberOfLines={1}>{title}</Text>
+                    <Text style={styles.planTarget}>{formatCurrency(Number(targetAmount), currency, null)}</Text>
+                    <Text style={styles.planQuote}>“{plan.motivationalLine}”</Text>
+                  </LinearGradient>
 
-                  {/* Stats row */}
-                  <View className="flex-row gap-2.5 mt-4">
+                  <View style={styles.planStats}>
                     {[
                       { value: plan.requiredMonthly, label: 'Monthly' },
                       { value: plan.requiredWeekly, label: 'Weekly' },
                       { value: plan.requiredDaily, label: 'Daily' },
                     ].map(({ value, label }) => (
-                      <View
-                        key={label}
-                        className={`flex-1 border rounded-[14px] py-4 items-center ${
-                          isDark
-                            ? 'bg-cardDark border-white/[0.09]'
-                            : 'bg-cardLight border-black/[0.1]'
-                        }`}
-                      >
-                        <Text
-                          className={`text-[15px] font-extrabold ${isDark ? 'text-textDark' : 'text-textLight'}`}
-                        >
-                          {formatCurrency(value, currency, enableConversion ? exchangeRates : null)}
+                      <View key={label} style={[styles.planStat, { backgroundColor: c.surface }, shadow(c, 1)]}>
+                        <Text style={[styles.planStatValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                          {formatCurrency(value, currency, rates)}
                         </Text>
-                        <Text
-                          className={`text-[10.5px] font-bold uppercase tracking-[0.5px] mt-1 ${isDark ? 'text-subDark' : 'text-subLight'}`}
-                        >
-                          {label}
-                        </Text>
+                        <Text style={[styles.planStatLabel, { color: c.textSecondary }]}>{label.toUpperCase()}</Text>
                       </View>
                     ))}
                   </View>
 
-                  <Text
-                    className={`text-[12.5px] mt-2.5 text-center ${isDark ? 'text-subDark' : 'text-subLight'}`}
-                  >
-                    Projected completion:{' '}
-                    {new Date(plan.projectedCompletionDate).toLocaleDateString('en-US', {
-                      month: 'long', day: 'numeric', year: 'numeric',
-                    })}
-                  </Text>
-
-                  <TouchableOpacity
-                    onPress={handleCommit}
-                    disabled={isCreating}
-                    className="mt-[26px]"
-                  >
-                    <LinearGradient
-                      colors={[GOLD, EMERALD]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      className="rounded-2xl py-[17px] items-center justify-center"
-                    >
-                      {isCreating
-                        ? <ActivityIndicator color="#FFF" />
-                        : <Text className="text-white text-base font-bold">I'm in</Text>
-                      }
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          )}
-
+                  <View style={[styles.hint, { backgroundColor: c.surfaceAlt, marginTop: 14 }]}>
+                    <Ionicons name="flag" size={15} color={brand.gold} />
+                    <Text style={[styles.hintText, { color: c.text }]}>
+                      Projected finish{' '}
+                      <Text style={{ fontWeight: '900' }}>
+                        {new Date(plan.projectedCompletionDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </Text>
+                    </Text>
+                  </View>
+                </View>
+              )
+            )}
+          </Animated.View>
         </ScrollView>
+
+        {current && (
+          <View style={[styles.bottomBar, { backgroundColor: c.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <PrimaryButton
+              title={current.title}
+              onPress={current.onPress}
+              loading={current.loading}
+              disabled={current.disabled}
+              colors={GOAL_GRADIENT}
+              trailing={step < 5 ? <Ionicons name="arrow-forward" size={18} color="#FFF" /> : undefined}
+            />
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 },
+  progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4, overflow: 'hidden' },
+  stepCount: { fontSize: 13, fontWeight: '800', minWidth: 28, textAlign: 'right' },
+
+  eyebrow: { color: brand.gold, fontSize: 11, fontWeight: '900', letterSpacing: 1.3, marginBottom: 8, marginTop: 8 },
+  title: { fontSize: 31, fontWeight: '900', lineHeight: 37, letterSpacing: -0.8 },
+  sub: { fontSize: 14.5, lineHeight: 21, marginTop: 8 },
+
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 22 },
+  tile: { width: TILE_W, alignItems: 'center', paddingVertical: 16, borderRadius: 18, borderWidth: 1.5, gap: 10 },
+  tileEmoji: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  tileLabel: { fontSize: 12.5, fontWeight: '800', paddingHorizontal: 4 },
+
+  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 16, marginTop: 20 },
+  input: { flex: 1, fontSize: 17, fontWeight: '700', paddingVertical: 16 },
+  photo: { height: 180, borderRadius: 20, borderWidth: 1, overflow: 'hidden', marginTop: 14 },
+  photoIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  photoHint: { fontSize: 13.5, fontWeight: '700', marginTop: 10 },
+  photoBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: 'rgba(0,0,0,0.45)' },
+  photoBarText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  cameraLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 14, padding: 6 },
+  cameraLinkText: { color: brand.primary, fontSize: 14, fontWeight: '800' },
+
+  amountCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 22, paddingVertical: 30, marginTop: 22 },
+  amountSymbol: { fontSize: 34, fontWeight: '800' },
+  amountInput: { fontSize: 48, fontWeight: '900', minWidth: 100, letterSpacing: -1.5, paddingVertical: 0 },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: radius.md, padding: 14, marginTop: 14 },
+  hintText: { flex: 1, fontSize: 13.5, lineHeight: 19 },
+
+  option: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 18, borderWidth: 1.5 },
+  optionIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  optionTitle: { fontSize: 16, fontWeight: '800' },
+  optionSub: { fontSize: 12.5, fontWeight: '500', marginTop: 2 },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: brand.gold },
+
+  thinking: { paddingVertical: 70, alignItems: 'center' },
+  thinkingText: { marginTop: 14, fontSize: 14, fontWeight: '600' },
+  planHero: { borderRadius: 24, padding: 22, overflow: 'hidden' },
+  planBlob: { position: 'absolute', width: 180, height: 180, borderRadius: 90, top: -70, right: -50, backgroundColor: 'rgba(255,255,255,0.15)' },
+  planEmoji: { fontSize: 36 },
+  planTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', marginTop: 8, letterSpacing: -0.4 },
+  planTarget: { color: 'rgba(255,255,255,0.9)', fontSize: 15, fontWeight: '800', marginTop: 2 },
+  planQuote: { color: '#FFF', fontSize: 15, fontStyle: 'italic', fontWeight: '600', lineHeight: 22, marginTop: 14 },
+  planStats: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  planStat: { flex: 1, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 8, alignItems: 'center' },
+  planStatValue: { fontSize: 16, fontWeight: '900' },
+  planStatLabel: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6, marginTop: 4 },
+
+  bottomBar: { paddingHorizontal: 20, paddingTop: 10 },
+});
